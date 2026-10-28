@@ -1,0 +1,8 @@
+{
+  "toleranceFactor": 3.0,
+  "minTimeoutSeconds": 0.25,
+  "lookaheadEvents": 4096,
+  "maxRetainedEvents": 4194304,
+  "defaultStepDelayMs": 500,
+  "solverMaxMemoryMB": 512
+}
