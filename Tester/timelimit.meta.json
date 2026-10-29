@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-10-29T08:30:55.347Z",
+  "solver": "backtracking",
+  "emsdk": "native",
+  "seeds": "0..19",
+  "statistic": "max computeMs over seeds",
+  "benchCapSeconds": 10,
+  "rows": 204,
+  "dropped": [],
+  "node": "v24.21.0",
+  "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+  "cores": 12,
+  "platform": "win32 10.0.26200",
+  "elapsedSeconds": 648
+}

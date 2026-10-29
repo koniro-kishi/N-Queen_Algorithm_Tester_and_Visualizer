@@ -4,6 +4,8 @@ import { generatePreplaced } from "../Tester/Board/preplaced";
 import { PERMIT_UNLIMITED } from "../Tester/Execution/protocol";
 import { Session, type SessionResult } from "../Tester/Execution/session";
 import { browserWorkerFactory } from "../Tester/Execution/worker-factory";
+import { runS4 } from "./spikes/s4";
+import { runS4b } from "./spikes/s4b";
 
 const app = document.getElementById("app")!;
 const log = (html: string) => {
@@ -89,6 +91,17 @@ async function bootstrap() {
     log(
       `<h3>S2 ${s.name} (step mode, N=6): ${result.status}</h3><pre>${JSON.stringify({ ...result, finalBoard: undefined }, null, 2)}</pre>`,
     );
+  }
+
+  // Spike S4: opt-in lewat ?s4 (memakan ±30 detik)
+  if (new URLSearchParams(location.search).has("s4")) {
+    const bt = solvers.find((x: any) => x.name === "backtracking");
+    if (bt) await runS4(app, bt);
+  }
+
+  if (new URLSearchParams(location.search).has("s4b")) {
+    const bt = solvers.find((x: any) => x.name === "backtracking");
+    if (bt) await runS4b(app, bt);
   }
 }
 

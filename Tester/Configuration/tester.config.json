@@ -4,5 +4,6 @@
   "lookaheadEvents": 4096,
   "maxRetainedEvents": 4194304,
   "defaultStepDelayMs": 500,
-  "solverMaxMemoryMB": 512
+  "solverMaxMemoryMB": 512,
+  "benchCapSeconds": 10
 }
