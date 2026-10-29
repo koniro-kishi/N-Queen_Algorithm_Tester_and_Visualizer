@@ -1,12 +1,22 @@
 // Main-thread state machine (design 6.1) over one Session at a time, plus history and display board.
 // Playback timing (rAF) is NOT here: PlaybackEngine will call advance(). Back/Next never touch the solver,
 // except Next at the frontier, which raises the permit by one (design 5.4).
-import { Board } from '../Board/board';
-import { HistoryStore } from '../Visualization/history';
-import { decodeEvent, OP_PUT, type DecodedEvent } from './protocol';
-import { Session, type SessionOptions, type SessionResult, type WorkerFactory } from './session';
+import { Board } from "../Board/board";
+import { HistoryStore } from "../Visualization/history";
+import { decodeEvent, OP_PUT, type DecodedEvent } from "./protocol";
+import {
+  Session,
+  type SessionOptions,
+  type SessionResult,
+  type WorkerFactory,
+} from "./session";
 
-export type ControllerState = 'Idle' | 'Running' | 'Paused' | 'Draining' | 'Finished';
+export type ControllerState =
+  | "Idle"
+  | "Running"
+  | "Paused"
+  | "Draining"
+  | "Finished";
 
 export interface Problem {
   n: number;
@@ -33,7 +43,7 @@ export interface Controls {
   back: boolean;
   next: boolean;
   stop: boolean;
-  playPause: 'play' | 'pause' | 'off';
+  playPause: "play" | "pause" | "off";
 }
 
 export interface ControllerView {
@@ -65,7 +75,7 @@ export class SessionController {
   private history: HistoryStore;
   private displayBoard!: Board;
   private session?: SessionLike;
-  private state: ControllerState = 'Idle';
+  private state: ControllerState = "Idle";
   private cursor = 0;
   private maxEventReached = 0;
   private solverDone = false;
@@ -88,10 +98,15 @@ export class SessionController {
   }
 
   /** The display board (read-only for callers). Rebuilt from events; not the worker's execution board. */
-  get board(): Board { return this.displayBoard; }
+  get board(): Board {
+    return this.displayBoard;
+  }
 
   getView(): ControllerView {
-    const cur = this.cursor - 1 >= this.history.firstIndex && this.cursor > 0 ? decodeEvent(this.history.get(this.cursor - 1)) : null;
+    const cur =
+      this.cursor - 1 >= this.history.firstIndex && this.cursor > 0
+        ? decodeEvent(this.history.get(this.cursor - 1))
+        : null;
     return {
       state: this.state,
       controls: this.controls(),
@@ -102,7 +117,13 @@ export class SessionController {
       maxEventReached: this.maxEventReached,
       currentEvent: cur,
       result: this.result,
-      status: this.statusOverride ?? (this.result ? this.result.status : this.state === 'Draining' ? 'Running' : this.state),
+      status:
+        this.statusOverride ??
+        (this.result
+          ? this.result.status
+          : this.state === "Draining"
+            ? "Running"
+            : this.state),
     };
   }
 
@@ -110,45 +131,60 @@ export class SessionController {
     const only = this.problem.onlyShowResult;
     const canBack = !only && this.cursor > this.history.firstIndex;
     switch (this.state) {
-      case 'Idle':     return { back: false, next: !only, stop: false, playPause: 'play' };
-      case 'Running':  return { back: false, next: false, stop: true, playPause: only ? 'off' : 'pause' };
-      case 'Paused':   return { back: canBack, next: true, stop: true, playPause: 'play' };
-      case 'Draining': return { back: false, next: false, stop: true, playPause: 'pause' };
+      case "Idle":
+        return { back: false, next: !only, stop: false, playPause: "play" };
+      case "Running":
+        return {
+          back: false,
+          next: false,
+          stop: true,
+          playPause: only ? "off" : "pause",
+        };
+      case "Paused":
+        return { back: canBack, next: true, stop: true, playPause: "play" };
+      case "Draining":
+        return { back: false, next: false, stop: true, playPause: "pause" };
       // Finished: the table says Next is off; navigation would be one-way, so Next replays recorded events
       // (never generates new ones). Flagged as issue I8.
-      case 'Finished': return { back: canBack, next: !only && this.cursor < this.history.length, stop: true, playPause: 'off' };
+      case "Finished":
+        return {
+          back: canBack,
+          next: !only && this.cursor < this.history.length,
+          stop: true,
+          playPause: "off",
+        };
     }
   }
 
   // ---- user actions ------------------------------------------------------------------------
   play(): void {
-    if (this.state === 'Idle') {
+    if (this.state === "Idle") {
       this.startSession(this.o.config.lookaheadEvents);
-      this.state = 'Running';
-    } else if (this.state === 'Paused') {
+      this.state = "Running";
+    } else if (this.state === "Paused") {
       this.pendingSteps = 0;
-      this.state = this.solverDone ? 'Draining' : 'Running';
+      this.state = this.solverDone ? "Draining" : "Running";
     } else return;
     this.emit();
   }
 
   pause(): void {
-    if (this.state !== 'Running' && this.state !== 'Draining') return;
+    if (this.state !== "Running" && this.state !== "Draining") return;
     if (this.problem.onlyShowResult) return;
-    this.state = 'Paused';
+    this.state = "Paused";
     this.emit();
   }
 
   next(): void {
     if (!this.controls().next) return;
-    if (this.state === 'Idle') {
+    if (this.state === "Idle") {
       this.startSession(1); // Next from Idle starts the solver and shows event 1
-      this.state = 'Paused';
+      this.state = "Paused";
       this.pendingSteps = 1;
     } else if (this.cursor < this.history.length) {
       this.applyForward();
       this.afterMove(false);
-    } else if (this.state === 'Paused' && this.session && !this.solverDone) {
+    } else if (this.state === "Paused" && this.session && !this.solverDone) {
       this.pendingSteps++;
       this.session.raisePermit(this.history.length + this.pendingSteps); // frontier: permit up by one
     }
@@ -166,7 +202,7 @@ export class SessionController {
     if (!this.controls().stop) return;
     this.session?.stop();
     this.reset();
-    this.statusOverride = 'Cancelled';
+    this.statusOverride = "Cancelled";
     this.emit();
   }
 
@@ -189,14 +225,20 @@ export class SessionController {
    * Applies up to `max` recorded events (Running / Draining only). Returns how many were applied.
    * Raises the permit to maxEventReached + L once per call, i.e. once per frame.
    */
-  advance(max: number): number {
-    if (this.state !== 'Running' && this.state !== 'Draining') return 0;
+  advance(max: number, budget?: { ms: number; now?: () => number }): number {
+    if (this.state !== "Running" && this.state !== "Draining") return 0;
+
+    const now = budget?.now ?? (() => performance.now());
+    const deadline = budget ? now() + budget.ms : Infinity;
     let applied = 0;
+
     while (applied < max && this.cursor < this.history.length) {
       this.applyForward();
       applied++;
+      if (budget && (applied & 127) === 0 && now() >= deadline) break;
     }
-    if (applied > 0 || this.cursor === this.history.length) this.afterMove(true);
+    if (applied > 0 || this.cursor === this.history.length)
+      this.afterMove(true);
     if (applied > 0) this.emit();
     return applied;
   }
@@ -211,10 +253,13 @@ export class SessionController {
   private reset(): void {
     this.history.clear();
     const b = new Board(this.problem.n);
-    for (const [x, y] of this.problem.preplaced) { b.put(x, y); b.lock(x, y); }
+    for (const [x, y] of this.problem.preplaced) {
+      b.put(x, y);
+      b.lock(x, y);
+    }
     this.displayBoard = b;
     this.session = undefined;
-    this.state = 'Idle';
+    this.state = "Idle";
     this.cursor = 0;
     this.maxEventReached = 0;
     this.solverDone = false;
@@ -227,7 +272,8 @@ export class SessionController {
   private startSession(initialPermit: number): void {
     this.statusOverride = undefined; // "Cancelled" only lasts until the next run starts
     const p = this.problem;
-    const factory: SessionFactory = this.o.sessionFactory ?? ((o) => new Session(o));
+    const factory: SessionFactory =
+      this.o.sessionFactory ?? ((o) => new Session(o));
     const s: SessionLike = factory({
       n: p.n,
       preplaced: p.preplaced,
@@ -236,8 +282,12 @@ export class SessionController {
       recordEvents: !p.onlyShowResult,
       initialPermit,
       createWorker: this.o.createWorker,
-      onEvents: (ev) => { if (this.session === s) this.handleEvents(ev); },
-      onFinish: (r) => { if (this.session === s) this.handleFinish(r); },
+      onEvents: (ev) => {
+        if (this.session === s) this.handleEvents(ev);
+      },
+      onFinish: (r) => {
+        if (this.session === s) this.handleFinish(r);
+      },
     });
     this.session = s;
     s.start();
@@ -245,7 +295,7 @@ export class SessionController {
 
   private handleEvents(events: Uint32Array): void {
     this.history.append(events, this.cursor);
-    if (this.state === 'Paused') {
+    if (this.state === "Paused") {
       while (this.pendingSteps > 0 && this.cursor < this.history.length) {
         this.applyForward();
         this.pendingSteps--;
@@ -256,16 +306,16 @@ export class SessionController {
   }
 
   private handleFinish(r: SessionResult): void {
-    if (r.status === 'Cancelled') return; // our own stop(); already reset
+    if (r.status === "Cancelled") return; // our own stop(); already reset
     this.solverDone = true;
     this.session = undefined;
     this.pendingSteps = 0;
-    if (r.status === 'Failed' || r.status === 'Execution Error') {
+    if (r.status === "Failed" || r.status === "Execution Error") {
       this.result = r; // timeouts and errors are shown immediately (I6)
-      this.state = 'Finished';
+      this.state = "Finished";
     } else {
       this.pendingResult = r;
-      if (this.state === 'Running') this.state = 'Draining';
+      if (this.state === "Running") this.state = "Draining";
       this.finalizeIfDone();
     }
     this.emit();
@@ -273,29 +323,37 @@ export class SessionController {
 
   private applyForward(): void {
     const e = decodeEvent(this.history.get(this.cursor));
-    if (e.op === OP_PUT) this.displayBoard.put(e.x, e.y); else this.displayBoard.remove(e.x, e.y);
+    if (e.op === OP_PUT) this.displayBoard.put(e.x, e.y);
+    else this.displayBoard.remove(e.x, e.y);
     this.cursor++;
   }
 
   private applyBackward(): void {
     const e = decodeEvent(this.history.get(this.cursor - 1)); // events are their own inverse
-    if (e.op === OP_PUT) this.displayBoard.remove(e.x, e.y); else this.displayBoard.put(e.x, e.y);
+    if (e.op === OP_PUT) this.displayBoard.remove(e.x, e.y);
+    else this.displayBoard.put(e.x, e.y);
     this.cursor--;
   }
 
   private afterMove(raisePermit: boolean): void {
     this.maxEventReached = Math.max(this.maxEventReached, this.cursor);
     if (raisePermit && this.session && !this.solverDone) {
-      this.session.raisePermit(this.maxEventReached + this.o.config.lookaheadEvents);
+      this.session.raisePermit(
+        this.maxEventReached + this.o.config.lookaheadEvents,
+      );
     }
     this.finalizeIfDone();
   }
 
   private finalizeIfDone(): void {
-    if (this.pendingResult && this.solverDone && this.cursor === this.history.length) {
+    if (
+      this.pendingResult &&
+      this.solverDone &&
+      this.cursor === this.history.length
+    ) {
       this.result = this.pendingResult;
       this.pendingResult = undefined;
-      this.state = 'Finished';
+      this.state = "Finished";
     }
   }
 }
