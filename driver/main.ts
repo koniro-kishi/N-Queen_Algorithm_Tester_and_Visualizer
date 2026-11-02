@@ -42,7 +42,9 @@ async function bootstrap() {
     `<p>Solvers: ${manifest.solvers.map((s: any) => `${s.name}${s.ok ? "" : " (build failed)"}`).join(", ")}</p>`,
   );
 
-  const solvers = manifest.solvers.filter((x: any) => x.ok);
+  const solvers = manifest.solvers.filter(
+    (x: any) => x.ok && x.name !== "spike-hang",
+  );
   const inst = generatePreplaced(8, 3, 1);
   log(
     `<p>Instance: N=8, P=3, seed=1, preplaced=${JSON.stringify(inst.queens)}</p>`,
@@ -90,6 +92,37 @@ async function bootstrap() {
     });
     log(
       `<h3>S2 ${s.name} (step mode, N=6): ${result.status}</h3><pre>${JSON.stringify({ ...result, finalBoard: undefined }, null, 2)}</pre>`,
+    );
+  }
+
+  // Spike S3: terminate() harus mematikan loop WASM yang tidak pernah yield.
+  const hang = manifest.solvers.find(
+    (x: any) => x.ok && x.name === "spike-hang",
+  );
+  if (hang) {
+    const t0 = performance.now();
+    const result = await new Promise<SessionResult>((resolve) => {
+      new Session({
+        n: 8,
+        preplaced: [],
+        moduleUrl: new URL(hang.module, location.origin).href,
+        timeoutSeconds: 1,
+        recordEvents: false,
+        initialPermit: PERMIT_UNLIMITED,
+        createWorker: browserWorkerFactory,
+        onFinish: resolve,
+      }).start();
+    });
+    const wall = Math.round(performance.now() - t0);
+    log(`<h3>S3 spike-hang: ${result.status} after ${wall} ms</h3>`);
+    log(
+      "<p>S3: selama 10 detik ke depan, cek Chrome Task Manager (Shift+Esc).</p>",
+    );
+    await new Promise((r) => setTimeout(r, 10_000));
+    log("<p>S3 selesai.</p>");
+  } else {
+    log(
+      '<p class="err">S3 dilewati: solver spike-hang tidak ada di manifest. Jalankan npm run build:solvers.</p>',
     );
   }
 

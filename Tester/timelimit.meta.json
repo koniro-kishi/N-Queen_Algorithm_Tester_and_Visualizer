@@ -1,15 +1,29 @@
 {
-  "generatedAt": "2026-10-29T08:30:55.347Z",
+  "generatedAt": "2026-11-02T22:02:38.431Z",
   "solver": "backtracking",
   "emsdk": "native",
-  "seeds": "0..19",
-  "statistic": "max computeMs over seeds",
+  "manifestGeneratedAt": "2026-11-02T21:41:50.428Z",
+  "k": 20,
+  "seeds": [
+    0,
+    19
+  ],
   "benchCapSeconds": 10,
-  "rows": 204,
-  "dropped": [],
-  "node": "v24.21.0",
-  "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
-  "cores": 12,
-  "platform": "win32 10.0.26200",
-  "elapsedSeconds": 648
+  "nRange": [
+    4,
+    20
+  ],
+  "recordEvents": false,
+  "rule": "limit = max computeMs over seeds (seconds); (N,P) with any seed above cap is omitted",
+  "rowsWritten": 204,
+  "discarded": [],
+  "totalRuns": 4080,
+  "wallSeconds": 713,
+  "host": {
+    "node": "v24.21.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-1235U",
+    "logicalCpus": 12
+  }
 }
