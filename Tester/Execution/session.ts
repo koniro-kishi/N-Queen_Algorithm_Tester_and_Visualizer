@@ -1,11 +1,21 @@
 // Main-thread session (design 5.6, 6.1 partially): one worker, one control block, one id.
 // Owns the watchdog, final validation and the terminal status. History/playback come later.
-import { validateBoard, type Rule } from '../Board/validator';
+import { validateBoard, type Rule } from "../Board/validator";
 import {
-  CTRL_PERMIT, CTRL_STATE, F_ACCUM_MS, F_RESUME_TS, PERMIT_UNLIMITED, STATE_RUNNING, STATE_WAITING, STATE_IDLE,
+  CTRL_PERMIT,
+  CTRL_STATE,
+  F_ACCUM_MS,
+  F_RESUME_TS,
+  PERMIT_UNLIMITED,
+  STATE_RUNNING,
+  STATE_WAITING,
+  STATE_IDLE,
   createControlBlock,
-  type ControlBlock, type ErrorKind, type FromWorker, type ToWorker,
-} from './protocol';
+  type ControlBlock,
+  type ErrorKind,
+  type FromWorker,
+  type ToWorker,
+} from "./protocol";
 
 export interface WorkerLike {
   postMessage(msg: ToWorker, transfer?: Transferable[]): void;
@@ -16,18 +26,46 @@ export interface WorkerLike {
 export type WorkerFactory = () => WorkerLike;
 
 export type SessionResult =
-  | { status: 'Successful'; computeMs: number; eventCount: number; finalBoard: string[] }
-  | { status: 'Failed'; timeoutSeconds: number; elapsedMs: number }
-  | { status: 'Invalid Solution'; rule: Rule; message: string; computeMs: number; eventCount: number; finalBoard: string[] }
-  | { status: 'Execution Error'; kind: ErrorKind; message: string; computeMs: number; eventCount: number; finalBoard?: string[] }
-  | { status: 'Cancelled' };
+  | {
+      status: "Successful";
+      computeMs: number;
+      eventCount: number;
+      finalBoard: string[];
+    }
+  | {
+      status: "Overtime";
+      timeoutSeconds: number;
+      computeMs: number;
+      eventCount: number;
+      finalBoard: string[];
+    }
+  | { status: "Failed"; cutoffSeconds: number; elapsedMs: number }
+  | {
+      status: "Invalid Solution";
+      rule: Rule;
+      message: string;
+      computeMs: number;
+      eventCount: number;
+      finalBoard: string[];
+    }
+  | {
+      status: "Execution Error";
+      kind: ErrorKind;
+      message: string;
+      computeMs: number;
+      eventCount: number;
+      finalBoard?: string[];
+    }
+  | { status: "Cancelled" };
 
 export interface SessionOptions {
   n: number;
   preplaced: Array<[number, number]>;
   moduleUrl: string;
-  /** Effective timeout in seconds (already includes tolerance factor and floor). */
+  /** Benchmark limit in seconds (tolerance and floor included). Exceeding it gives Overtime. */
   timeoutSeconds: number;
+  /** Hard cutoff in seconds. Exceeding it gives Failed and the worker is terminated. */
+  cutoffSeconds: number;
   /** false = Only Show Result. */
   recordEvents: boolean;
   /** Events the solver may produce before it first waits (1 for Idle + Next). Ignored when !recordEvents. */
@@ -58,9 +96,16 @@ export class Session {
   }
 
   start(): void {
-    if (this.worker || this.finished) throw new Error('Session already started');
+    if (this.worker || this.finished)
+      throw new Error("Session already started");
     const { i32 } = this.control;
-    Atomics.store(i32, CTRL_PERMIT, this.o.recordEvents ? Math.min(this.o.initialPermit, PERMIT_UNLIMITED) : PERMIT_UNLIMITED);
+    Atomics.store(
+      i32,
+      CTRL_PERMIT,
+      this.o.recordEvents
+        ? Math.min(this.o.initialPermit, PERMIT_UNLIMITED)
+        : PERMIT_UNLIMITED,
+    );
 
     const w = this.o.createWorker();
     this.worker = w;
@@ -68,15 +113,15 @@ export class Session {
     w.onerror = (e) => {
       const started = Atomics.load(i32, CTRL_STATE) !== STATE_IDLE;
       this.finish({
-        status: 'Execution Error',
-        kind: started ? 'trap' : 'load',
-        message: e.message ?? 'Worker error',
+        status: "Execution Error",
+        kind: started ? "trap" : "load",
+        message: e.message ?? "Worker error",
         computeMs: this.elapsedMs(),
         eventCount: 0,
       });
     };
     w.postMessage({
-      type: 'start',
+      type: "start",
       sessionId: this.id,
       moduleUrl: this.o.moduleUrl,
       n: this.o.n,
@@ -93,12 +138,13 @@ export class Session {
     const t = Math.min(target, PERMIT_UNLIMITED);
     if (t <= Atomics.load(i32, CTRL_PERMIT) || this.finished) return;
     Atomics.store(i32, CTRL_PERMIT, t);
-    if (Atomics.load(i32, CTRL_STATE) === STATE_WAITING) Atomics.notify(i32, CTRL_PERMIT);
+    if (Atomics.load(i32, CTRL_STATE) === STATE_WAITING)
+      Atomics.notify(i32, CTRL_PERMIT);
   }
 
   /** User Stop / Resize / Place: pre-emptive cancel. The solver never learns about it. */
   stop(): void {
-    this.finish({ status: 'Cancelled' });
+    this.finish({ status: "Cancelled" });
   }
 
   /** Compute time so far: accumulated + current running slice (design 5.5). Small read skew is accepted. */
@@ -106,35 +152,75 @@ export class Session {
     const { i32, f64 } = this.control;
     const state = Atomics.load(i32, CTRL_STATE);
     const accum = f64[F_ACCUM_MS]!;
-    return accum + (state === STATE_RUNNING ? Math.max(0, this.now() - f64[F_RESUME_TS]!) : 0);
+    return (
+      accum +
+      (state === STATE_RUNNING
+        ? Math.max(0, this.now() - f64[F_RESUME_TS]!)
+        : 0)
+    );
   }
 
   private tick(): void {
     if (this.finished) return;
     const elapsed = this.elapsedMs();
-    if (elapsed > this.o.timeoutSeconds * 1000) {
-      this.finish({ status: 'Failed', timeoutSeconds: this.o.timeoutSeconds, elapsedMs: elapsed });
+    if (elapsed > this.o.cutoffSeconds * 1000) {
+      this.finish({
+        status: "Failed",
+        cutoffSeconds: this.o.cutoffSeconds,
+        elapsedMs: elapsed,
+      });
     }
   }
 
   private handle(msg: FromWorker): void {
     if (this.finished || msg.sessionId !== this.id) return; // stale message
-    if (msg.type === 'events') {
+    if (msg.type === "events") {
       this.o.onEvents?.(msg.events);
       return;
     }
     const out = msg.outcome;
-    if (out.status === 'error') {
-      this.finish({ status: 'Execution Error', kind: out.kind, message: out.message, computeMs: out.computeMs, eventCount: out.eventCount, finalBoard: out.finalBoard });
+    if (out.status === "error") {
+      this.finish({
+        status: "Execution Error",
+        kind: out.kind,
+        message: out.message,
+        computeMs: out.computeMs,
+        eventCount: out.eventCount,
+        finalBoard: out.finalBoard,
+      });
       return;
     }
     const v = validateBoard(out.finalBoard, this.o.n, this.o.preplaced);
     if (!v.ok) {
-      this.finish({ status: 'Invalid Solution', rule: v.rule, message: v.message, computeMs: out.computeMs, eventCount: out.eventCount, finalBoard: out.finalBoard });
+      this.finish({
+        status: "Invalid Solution",
+        rule: v.rule,
+        message: v.message,
+        computeMs: out.computeMs,
+        eventCount: out.eventCount,
+        finalBoard: out.finalBoard,
+      });
+    } else if (out.computeMs > this.o.cutoffSeconds * 1000) {
+      this.finish({
+        status: "Failed",
+        cutoffSeconds: this.o.cutoffSeconds,
+        elapsedMs: out.computeMs,
+      });
     } else if (out.computeMs > this.o.timeoutSeconds * 1000) {
-      this.finish({ status: 'Failed', timeoutSeconds: this.o.timeoutSeconds, elapsedMs: out.computeMs });
+      this.finish({
+        status: "Overtime",
+        timeoutSeconds: this.o.timeoutSeconds,
+        computeMs: out.computeMs,
+        eventCount: out.eventCount,
+        finalBoard: out.finalBoard,
+      });
     } else {
-      this.finish({ status: 'Successful', computeMs: out.computeMs, eventCount: out.eventCount, finalBoard: out.finalBoard });
+      this.finish({
+        status: "Successful",
+        computeMs: out.computeMs,
+        eventCount: out.eventCount,
+        finalBoard: out.finalBoard,
+      });
     }
   }
 

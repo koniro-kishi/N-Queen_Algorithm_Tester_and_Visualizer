@@ -24,6 +24,7 @@ export interface Problem {
   moduleUrl: string;
   /** Effective timeout in seconds. */
   timeoutSeconds: number;
+  cutoffSeconds: number;
   onlyShowResult: boolean;
 }
 
@@ -284,6 +285,7 @@ export class SessionController {
       preplaced: p.preplaced,
       moduleUrl: p.moduleUrl,
       timeoutSeconds: p.timeoutSeconds,
+      cutoffSeconds: p.cutoffSeconds,
       recordEvents: !p.onlyShowResult,
       initialPermit,
       createWorker: this.o.createWorker,

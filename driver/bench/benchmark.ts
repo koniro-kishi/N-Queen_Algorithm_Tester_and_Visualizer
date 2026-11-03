@@ -116,6 +116,7 @@ function runOnce(
       preplaced: inst.queens,
       moduleUrl,
       timeoutSeconds: capSeconds, // Session marks > cap as 'Failed' (watchdog or post-hoc), same as production
+      cutoffSeconds: capSeconds, // benchmark: anything above the cap is Failed, no Overtime band
       recordEvents: false, // Only Show Result: no event recording, no back-pressure
       initialPermit: PERMIT_UNLIMITED,
       createWorker: () => new NodeWorker(),

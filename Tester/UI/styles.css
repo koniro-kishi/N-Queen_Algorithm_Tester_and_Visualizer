@@ -239,55 +239,42 @@ input[type="range"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 12px;
+  padding: 16px;
+  text-align: center;
+  color: #fff;
+}
+.overlay.ok {
+  background: rgba(46, 125, 50, 0.95);
+}
+.overlay.warn {
+  background: rgba(245, 200, 57, 0.95);
+  color: #1b1f27;
+}
+.overlay.bad {
+  background: rgba(179, 64, 43, 0.95);
 }
 .overlay-box {
-  background: var(--panel);
-  border: 2px solid var(--line);
-  border-radius: 6px;
-  padding: 16px;
   max-width: 100%;
   max-height: 100%;
   overflow: auto;
-}
-.overlay-box.ok {
-  border-color: var(--ok);
-}
-.overlay-box.bad {
-  border-color: var(--bad);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .overlay-box h2 {
-  margin: 0 0 8px;
-  font-size: 16px;
+  margin: 0 0 14px;
+  font-size: 36px;
 }
 .overlay-box p {
-  margin: 0 0 6px;
+  margin: 0 0 10px;
+  font-size: 22px;
   overflow-wrap: anywhere;
 }
 .overlay-box .close {
-  margin-top: 12px;
-}
-.mini-board {
-  display: grid;
-  width: min(260px, 100%);
-  aspect-ratio: 1;
-  margin-top: 8px;
-  border: 1px solid var(--line);
-}
-.mini-board span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #111;
-}
-.mini-board .l {
-  background: #eaedd1;
-}
-.mini-board .d {
-  background: #769556;
+  margin-top: 16px;
+  padding: 8px 22px;
+  font-size: 20px;
+  color: var(--text);
 }
 
 .tracer {

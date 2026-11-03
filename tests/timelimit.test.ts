@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   effectiveTimeout,
   formatTimeout,
+  formatDuration,
   parseTimelimitCsv,
 } from "../Tester/Configuration/timelimit";
 import { validateConfig } from "../Tester/Configuration/config";
@@ -14,6 +15,7 @@ const cfg = validateConfig({
   defaultStepDelayMs: 0,
   solverMaxMemoryMB: 512,
   benchCapSeconds: 10,
+  cutoffSeconds: 60,
 });
 
 describe("timelimit.csv", () => {
@@ -40,5 +42,10 @@ describe("timelimit.csv", () => {
     expect(formatTimeout(6)).toBe("6");
     expect(formatTimeout(0.25)).toBe("0.25");
     expect(formatTimeout(1.23456)).toBe("1.235");
+  });
+  it("formats durations as m:ss.fffff", () => {
+    expect(formatDuration(0)).toBe("0:00.00000");
+    expect(formatDuration(1.234)).toBe("0:00.00123");
+    expect(formatDuration(61234.5)).toBe("1:01.23450");
   });
 });

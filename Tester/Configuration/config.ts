@@ -6,6 +6,7 @@ export interface TesterConfig {
   defaultStepDelayMs: number;
   solverMaxMemoryMB: number;
   benchCapSeconds: number;
+  cutoffSeconds: number;
 }
 
 export function validateConfig(raw: unknown): TesterConfig {
@@ -24,6 +25,7 @@ export function validateConfig(raw: unknown): TesterConfig {
     defaultStepDelayMs: num("defaultStepDelayMs"),
     solverMaxMemoryMB: num("solverMaxMemoryMB"),
     benchCapSeconds: num("benchCapSeconds"),
+    cutoffSeconds: num("cutoffSeconds"),
   };
   if (cfg.toleranceFactor < 1 || cfg.toleranceFactor > 100)
     throw new Error("config.toleranceFactor must be in [1, 100]");
@@ -33,5 +35,7 @@ export function validateConfig(raw: unknown): TesterConfig {
     throw new Error("config.lookaheadEvents must be >= 1");
   if (cfg.benchCapSeconds <= 0)
     throw new Error("config.benchCapSeconds must be > 0");
+  if (cfg.cutoffSeconds <= cfg.minTimeoutSeconds)
+    throw new Error("config.cutoffSeconds must be > minTimeoutSeconds");
   return cfg;
 }
