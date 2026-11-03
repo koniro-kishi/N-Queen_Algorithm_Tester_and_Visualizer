@@ -127,6 +127,11 @@ export class SessionController {
     };
   }
 
+  /** Decoded event at a global index, or null outside the retained window. */
+  getEvent(i: number): DecodedEvent | null {
+    return this.history.has(i) ? decodeEvent(this.history.get(i)) : null;
+  }
+
   private controls(): Controls {
     const only = this.problem.onlyShowResult;
     const canBack = !only && this.cursor > this.history.firstIndex;
