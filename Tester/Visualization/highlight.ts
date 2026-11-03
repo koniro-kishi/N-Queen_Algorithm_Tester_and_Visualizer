@@ -1,6 +1,6 @@
 // Highlight rules (design 6.3). Pure functions of (display board view, event): Back/Next restore them exactly.
 import type { DecodedEvent } from "../Execution/protocol";
-import { OP_PUT } from "../Execution/protocol";
+import { OP_PUT, OP_CHECK } from "../Execution/protocol";
 
 export const COLORS = {
   light: "#eaedd1",
@@ -11,6 +11,7 @@ export const COLORS = {
 
 export type HighlightKind =
   | "none"
+  | "checked"
   | "valid" // put, pairs === 0
   | "conflict" // put, the new queen is attacked by at least one queen
   | "conflict-elsewhere" // put, nobody attacks it, but a conflict persists elsewhere (issue I1)
@@ -41,6 +42,9 @@ export function computeHighlight(
   if (!event) return NO_HIGHLIGHT;
   const { x, y } = event;
 
+  if (event.op === OP_CHECK)
+    return { kind: "checked", cells: [{ x, y, fill: null, outline: true }] };
+
   if (event.op !== OP_PUT) {
     return { kind: "removed", cells: [{ x, y, fill: null, outline: true }] };
   }
@@ -70,4 +74,14 @@ export function computeHighlight(
     kind: "conflict-elsewhere",
     cells: [{ x, y, fill: "valid", outline: false }],
   };
+}
+
+export function describeEvent(index: number, e: DecodedEvent): string {
+  const n = `#${index + 1}`;
+  if (e.op === OP_CHECK)
+    return `${n}  CHECK (${e.x},${e.y})  ${e.valid ? "safe" : "attacked"}`;
+  if (e.op !== OP_PUT) return `${n}  REMOVE (${e.x},${e.y})`;
+  return e.valid
+    ? `${n}  PUT (${e.x},${e.y})  valid`
+    : `${n}  PUT (${e.x},${e.y})  conflict (${e.pairs} ${e.pairs === 1 ? "pair" : "pairs"})`;
 }

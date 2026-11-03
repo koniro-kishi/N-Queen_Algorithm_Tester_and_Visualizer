@@ -53,6 +53,7 @@ export async function runS4(
       preplaced: inst.queens,
       moduleUrl: new URL(solver.module, location.origin).href,
       timeoutSeconds: o.timeoutSeconds ?? 120,
+      cutoffSeconds: config.cutoffSeconds,
       onlyShowResult: false,
     },
   });

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { encodeEvent, OP_PUT, OP_REMOVE } from "../Tester/Execution/protocol";
+import {
+  encodeEvent,
+  OP_PUT,
+  OP_REMOVE,
+  OP_CHECK,
+} from "../Tester/Execution/protocol";
 import {
   SessionController,
   type Problem,
@@ -42,6 +47,7 @@ function make(
     preplaced: [],
     moduleUrl: "m",
     timeoutSeconds: 5,
+    cutoffSeconds: 60,
     onlyShowResult: false,
     ...over,
   };
@@ -206,14 +212,14 @@ describe("Next / Back stepping", () => {
 });
 
 describe("Terminal results", () => {
-  it("Failed (timeout) shows immediately; history stays navigable", () => {
+  it("Failed (cutoff) shows immediately; history stays navigable", () => {
     const { c, last } = make();
     c.play();
     last().o.onEvents!(batch(put(0, 0), put(1, 2), put(2, 1)));
     c.advance(1);
     last().o.onFinish({
       status: "Failed",
-      timeoutSeconds: 0.5,
+      cutoffSeconds: 0.5,
       elapsedMs: 600,
     });
     const v = c.getView();
@@ -354,6 +360,7 @@ describe("Stop / configure / isolation", () => {
       preplaced: [[2, 3]],
       moduleUrl: "m",
       timeoutSeconds: 1,
+      cutoffSeconds: 60,
       onlyShowResult: false,
     });
     expect(old.stopped).toBe(true);
@@ -417,5 +424,38 @@ describe("advance budget", () => {
     expect(c.advance(Infinity, { ms: 10, now: () => (t += 5) })).toBe(256);
     expect(c.getView().cursor).toBe(256);
     expect(c.advance(Infinity)).toBe(744);
+  });
+});
+
+describe("opCounts and Only Show Result board", () => {
+  it("opCounts follow the cursor; check events leave the board alone", () => {
+    const { c, last } = make();
+    c.play();
+    last().o.onEvents!(
+      batch(put(0, 1), encodeEvent(1, 1, OP_CHECK, false, 0), rem(0, 1)),
+    );
+    c.advance(3);
+    expect(c.getView().opCounts).toEqual({ put: 1, remove: 1, check: 1 });
+    c.pause();
+    c.back();
+    c.back();
+    expect(c.getView().opCounts).toEqual({ put: 1, remove: 0, check: 0 });
+    expect(c.board.view()[0]).toBe("xQxx");
+  });
+
+  it("Only Show Result shows the final board; Stop restores the initial one", () => {
+    const { c, last } = make({ onlyShowResult: true, preplaced: [[0, 1]] });
+    c.play();
+    last().o.onFinish({
+      status: "Successful",
+      computeMs: 1,
+      eventCount: 4,
+      finalBoard: ["xQxx", "xxxQ", "Qxxx", "xxQx"],
+    });
+    expect(c.board.view()).toEqual(["xQxx", "xxxQ", "Qxxx", "xxQx"]);
+    expect(c.board.isLocked(0, 1)).toBe(true);
+    expect(c.getView().cursor).toBe(0);
+    c.stop();
+    expect(c.board.view()).toEqual(["xQxx", "xxxx", "xxxx", "xxxx"]);
   });
 });

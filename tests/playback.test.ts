@@ -164,7 +164,7 @@ describe('PlaybackEngine + SessionController', () => {
     let session!: FakeSession;
     const c = new SessionController({
       config: { lookaheadEvents: 50, maxRetainedEvents: 100_000 },
-      problem: { n: 8, preplaced: [], moduleUrl: 'm', timeoutSeconds: 5, onlyShowResult: false },
+      problem: { n: 8, preplaced: [], moduleUrl: 'm', timeoutSeconds: 5, cutoffSeconds: 60, onlyShowResult: false },
       createWorker: () => { throw new Error('unused'); },
       sessionFactory: (o) => (session = new FakeSession(o)),
     });

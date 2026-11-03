@@ -1,11 +1,23 @@
 // Environment-neutral solver runner (design section 3): no DOM, no `self`. The browser worker and the
 // Node benchmark harness both wrap this, so benchmark and production share one code path.
-import { Board, OperationError } from '../../Board/board';
+import { Board, OperationError } from "../../Board/board";
 import {
-  CTRL_PERMIT, CTRL_STATE, F_ACCUM_MS, F_RESUME_TS, FLUSH_EVENTS, OP_PUT, OP_REMOVE,
-  STATE_DONE, STATE_RUNNING, STATE_WAITING, encodeEvent,
-  type ControlBlock, type ErrorKind, type RunOutcome,
-} from '../protocol';
+  CTRL_PERMIT,
+  CTRL_STATE,
+  F_ACCUM_MS,
+  F_RESUME_TS,
+  FLUSH_EVENTS,
+  OP_PUT,
+  OP_REMOVE,
+  OP_CHECK,
+  STATE_DONE,
+  STATE_RUNNING,
+  STATE_WAITING,
+  encodeEvent,
+  type ControlBlock,
+  type ErrorKind,
+  type RunOutcome,
+} from "../protocol";
 
 export interface SolverModule {
   _nq_run(n: number): number;
@@ -37,12 +49,14 @@ const defaultWait = (i32: Int32Array, observed: number): void => {
 
 function classify(e: unknown): ErrorKind {
   const name = (e as { name?: string } | null)?.name;
-  if (e instanceof OperationError || name === 'OperationError') return 'operation';
-  if (name === 'ExitStatus') return 'exit';
-  return 'trap';
+  if (e instanceof OperationError || name === "OperationError")
+    return "operation";
+  if (name === "ExitStatus") return "exit";
+  return "trap";
 }
 
-const messageOf = (e: unknown): string => String((e as { message?: string } | null)?.message ?? e);
+const messageOf = (e: unknown): string =>
+  String((e as { message?: string } | null)?.message ?? e);
 
 export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
   const { n, preplaced, loadModule, control, recordEvents, emit } = opts;
@@ -86,10 +100,15 @@ export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
     Atomics.store(i32, CTRL_STATE, STATE_RUNNING);
   };
 
-  const record = (x: number, y: number, op: number): void => {
+  const record = (
+    x: number,
+    y: number,
+    op: number,
+    valid: boolean = board.pairs === 0,
+  ): void => {
     produced++;
     if (!recordEvents) return;
-    buf[k++] = encodeEvent(x, y, op, board.pairs === 0, board.pairs);
+    buf[k++] = encodeEvent(x, y, op, valid, board.pairs);
     if (k === FLUSH_EVENTS) flush();
     if (produced >= Atomics.load(i32, CTRL_PERMIT)) waitForPermit();
   };
@@ -105,8 +124,21 @@ export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
       board.remove(x, y);
       record(x, y, OP_REMOVE);
     },
-    check: (x: number, y: number): boolean => board.check(x, y),
-    view: (): Uint8Array => encoder.encode(board.view().join('')),
+    check(x: number, y: number): boolean {
+      const ok = board.check(x, y);
+      // Out-of-bounds checks are not recorded: the event format cannot hold those coordinates.
+      if (
+        Number.isInteger(x) &&
+        Number.isInteger(y) &&
+        x >= 0 &&
+        y >= 0 &&
+        x < n &&
+        y < n
+      )
+        record(x, y, OP_CHECK, ok);
+      return ok;
+    },
+    view: (): Uint8Array => encoder.encode(board.view().join("")),
   };
 
   try {
@@ -115,7 +147,13 @@ export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
       mod = await loadModule();
     } catch (e) {
       Atomics.store(i32, CTRL_STATE, STATE_DONE);
-      return { status: 'error', kind: 'load', message: messageOf(e), computeMs: 0, eventCount: 0 };
+      return {
+        status: "error",
+        kind: "load",
+        message: messageOf(e),
+        computeMs: 0,
+        eventCount: 0,
+      };
     }
 
     resumeTs = now();
@@ -136,12 +174,21 @@ export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
     flush();
     Atomics.store(i32, CTRL_STATE, STATE_DONE);
 
-    const base = { computeMs: accumMs, eventCount: produced, finalBoard: board.view() };
-    if (failure) return { status: 'error', ...failure, ...base };
+    const base = {
+      computeMs: accumMs,
+      eventCount: produced,
+      finalBoard: board.view(),
+    };
+    if (failure) return { status: "error", ...failure, ...base };
     if (returnCode !== 0) {
-      return { status: 'error', kind: 'solver-nonzero', message: `solve() returned ${returnCode}`, ...base };
+      return {
+        status: "error",
+        kind: "solver-nonzero",
+        message: `solve() returned ${returnCode}`,
+        ...base,
+      };
     }
-    return { status: 'completed', ...base };
+    return { status: "completed", ...base };
   } finally {
     delete target.__nqHost;
   }

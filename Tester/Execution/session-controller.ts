@@ -3,7 +3,7 @@
 // except Next at the frontier, which raises the permit by one (design 5.4).
 import { Board } from "../Board/board";
 import { HistoryStore } from "../Visualization/history";
-import { decodeEvent, OP_PUT, type DecodedEvent } from "./protocol";
+import { decodeEvent, OP_PUT, OP_REMOVE, type DecodedEvent } from "./protocol";
 import {
   Session,
   type SessionOptions,
@@ -26,6 +26,12 @@ export interface Problem {
   timeoutSeconds: number;
   cutoffSeconds: number;
   onlyShowResult: boolean;
+}
+
+export interface OpCounts {
+  put: number;
+  remove: number;
+  check: number;
 }
 
 export interface ControllerConfig {
@@ -57,6 +63,8 @@ export interface ControllerView {
   truncated: boolean;
   maxEventReached: number;
   currentEvent: DecodedEvent | null;
+  /** Operations among events [0, cursor). Follows Back/Next. */
+  opCounts: OpCounts;
   /** Terminal result once it is known and may be shown (see 6.5 / I6). */
   result: SessionResult | null;
   /** Status line text. */
@@ -78,6 +86,7 @@ export class SessionController {
   private session?: SessionLike;
   private state: ControllerState = "Idle";
   private cursor = 0;
+  private counts: OpCounts = { put: 0, remove: 0, check: 0 };
   private maxEventReached = 0;
   private solverDone = false;
   private pendingResult?: SessionResult; // Successful / Invalid Solution, waiting for playback to reach the end
@@ -115,6 +124,7 @@ export class SessionController {
       length: this.history.length,
       firstIndex: this.history.firstIndex,
       truncated: this.history.truncated,
+      opCounts: this.counts,
       maxEventReached: this.maxEventReached,
       currentEvent: cur,
       result: this.result,
@@ -267,6 +277,7 @@ export class SessionController {
     this.session = undefined;
     this.state = "Idle";
     this.cursor = 0;
+    this.counts = { put: 0, remove: 0, check: 0 };
     this.maxEventReached = 0;
     this.solverDone = false;
     this.pendingResult = undefined;
@@ -317,6 +328,8 @@ export class SessionController {
     this.solverDone = true;
     this.session = undefined;
     this.pendingSteps = 0;
+    if (this.problem.onlyShowResult && "finalBoard" in r && r.finalBoard)
+      this.showFinalBoard(r.finalBoard);
     if (r.status === "Failed" || r.status === "Execution Error") {
       this.result = r; // timeouts and errors are shown immediately (I6)
       this.state = "Finished";
@@ -328,17 +341,41 @@ export class SessionController {
     this.emit();
   }
 
+  /** Only Show Result records no events, so the display board is built straight from the final snapshot. */
+  private showFinalBoard(rows: string[]): void {
+    const n = this.problem.n;
+    if (rows.length !== n) return;
+    const b = new Board(n);
+    rows.forEach((row, x) => {
+      for (let y = 0; y < Math.min(n, row.length); y++)
+        if (row[y] === "Q") b.put(x, y);
+    });
+    for (const [x, y] of this.problem.preplaced)
+      if (rows[x]?.[y] === "Q") b.lock(x, y);
+    this.displayBoard = b;
+  }
+
   private applyForward(): void {
     const e = decodeEvent(this.history.get(this.cursor));
-    if (e.op === OP_PUT) this.displayBoard.put(e.x, e.y);
-    else this.displayBoard.remove(e.x, e.y);
+    if (e.op === OP_PUT) {
+      this.displayBoard.put(e.x, e.y);
+      this.counts.put++;
+    } else if (e.op === OP_REMOVE) {
+      this.displayBoard.remove(e.x, e.y);
+      this.counts.remove++;
+    } else this.counts.check++; // a check never changes the board
     this.cursor++;
   }
 
   private applyBackward(): void {
     const e = decodeEvent(this.history.get(this.cursor - 1)); // events are their own inverse
-    if (e.op === OP_PUT) this.displayBoard.remove(e.x, e.y);
-    else this.displayBoard.put(e.x, e.y);
+    if (e.op === OP_PUT) {
+      this.displayBoard.remove(e.x, e.y);
+      this.counts.put--;
+    } else if (e.op === OP_REMOVE) {
+      this.displayBoard.put(e.x, e.y);
+      this.counts.remove--;
+    } else this.counts.check--;
     this.cursor--;
   }
 

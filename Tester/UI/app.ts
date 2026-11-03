@@ -21,6 +21,7 @@ import { buildRenderState } from "../Visualization/render-state";
 import { h } from "./dom";
 import { ResultOverlay, StatusLine } from "./overlay";
 import { ConfigPanel, noBenchmarkMessage, type SolverEntry } from "./panels";
+import { OpsChart } from "./ops-chart";
 import { VirtualTracer } from "./virtual-tracer";
 
 const fatal = (root: HTMLElement, msg: string): void =>
@@ -148,6 +149,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   const canvas = h("canvas", { class: "board", "aria-label": "Chess board" });
   const overlay = new ResultOverlay();
   const status = new StatusLine(() => overlay.reopen());
+  const opsChart = new OpsChart();
   const tracer = new VirtualTracer((i) => ctrl.getEvent(i));
   root.replaceChildren(
     h("h1", {}, "N-Queen algorithm tester"),
@@ -160,6 +162,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
         { class: "center" },
         h("div", { class: "board-wrap" }, canvas, overlay.el),
         status.el,
+        opsChart.el,
       ),
       tracer.el,
     ),
@@ -174,6 +177,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     const t = timeoutFor();
     renderer.setState(buildRenderState(ctrl.board, v.currentEvent));
     tracer.update(v);
+    opsChart.update(v.opCounts);
     panel.setControls(v, canRun());
     overlay.update(v.result);
     status.update(v, {

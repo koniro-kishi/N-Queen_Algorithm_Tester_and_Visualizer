@@ -244,14 +244,14 @@ input[type="range"] {
   color: #fff;
 }
 .overlay.ok {
-  background: rgba(46, 125, 50, 0.95);
+  background: rgba(46, 125, 50, 0.82);
 }
 .overlay.warn {
-  background: rgba(245, 200, 57, 0.95);
+  background: rgba(245, 200, 57, 0.82);
   color: #1b1f27;
 }
 .overlay.bad {
-  background: rgba(179, 64, 43, 0.95);
+  background: rgba(179, 64, 43, 0.82);
 }
 .overlay-box {
   max-width: 100%;
@@ -346,4 +346,58 @@ input[type="range"] {
   text-align: center;
   color: var(--muted);
   pointer-events: none;
+}
+
+.ops {
+  margin-top: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+}
+.ops h2 {
+  margin: 0 0 8px;
+}
+.ops-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 84px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ops-row:last-child {
+  margin-bottom: 0;
+}
+.ops-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ops-track {
+  height: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ops-fill {
+  height: 100%;
+  width: 0;
+}
+.ops-fill.put {
+  background: #2e7d32;
+}
+.ops-fill.remove {
+  background: #c62828;
+}
+.ops-fill.check {
+  background: #1e66d0;
+}
+.ops-num {
+  text-align: right;
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
 }
