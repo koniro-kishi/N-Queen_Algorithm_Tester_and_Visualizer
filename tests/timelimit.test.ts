@@ -9,7 +9,7 @@ import { validateConfig } from "../Tester/Configuration/config";
 
 const cfg = validateConfig({
   toleranceFactor: 3,
-  minTimeoutSeconds: 0.25,
+  minTimeoutSeconds: 0.05,
   lookaheadEvents: 4096,
   maxRetainedEvents: 1,
   defaultStepDelayMs: 0,
