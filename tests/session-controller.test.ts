@@ -40,6 +40,7 @@ function make(
   over: Partial<Problem> = {},
   config = { lookaheadEvents: 100, maxRetainedEvents: 1000 },
   chunkSize?: number,
+  measureFirst = false,
 ) {
   const sessions: FakeSession[] = [];
   const problem: Problem = {
@@ -55,6 +56,7 @@ function make(
     config,
     problem,
     chunkSize,
+    measureFirst,
     createWorker: () => {
       throw new Error("unused");
     },
@@ -457,5 +459,127 @@ describe("opCounts and Only Show Result board", () => {
     expect(c.getView().cursor).toBe(0);
     c.stop();
     expect(c.board.view()).toEqual(["xQxx", "xxxx", "xxxx", "xxxx"]);
+  });
+});
+
+describe("Measuring pass", () => {
+  const mk = () => make({}, undefined, undefined, true);
+
+  it("Play from Idle measures first (unrecorded); only Stop is enabled", () => {
+    const { c, sessions, last } = mk();
+    c.play();
+    expect(sessions).toHaveLength(1);
+    expect(last().o.recordEvents).toBe(false);
+    expect(c.getView().state).toBe("Measuring");
+    expect(c.getView().controls).toEqual({
+      back: false,
+      next: false,
+      stop: true,
+      playPause: "off",
+    });
+    last().o.onFinish(OK);
+    expect(sessions).toHaveLength(2);
+    expect(last().o.recordEvents).toBe(true);
+    expect(last().o.initialPermit).toBe(100);
+    expect(c.getView().state).toBe("Running");
+  });
+
+  it("Next from Idle measures, then starts pass 2 with permit 1 and shows event 1", () => {
+    const { c, sessions, last } = mk();
+    c.next();
+    expect(c.getView().state).toBe("Measuring");
+    sessions[0]!.o.onFinish(OK);
+    expect(last().o.initialPermit).toBe(1);
+    expect(c.getView().state).toBe("Paused");
+    last().o.onEvents!(batch(put(0, 1)));
+    expect(c.getView().cursor).toBe(1);
+  });
+
+  it("the result comes from pass 1 and appears when pass 2 playback reaches the end", () => {
+    const { c, sessions } = mk();
+    const measured: SessionResult = {
+      status: "Overtime",
+      timeoutSeconds: 0.05,
+      computeMs: 80,
+      eventCount: 2,
+      finalBoard: [],
+    };
+    c.play();
+    sessions[0]!.o.onFinish(measured);
+    sessions[1]!.o.onEvents!(batch(put(0, 1), put(1, 3)));
+    sessions[1]!.o.onFinish({
+      status: "Successful",
+      computeMs: 500,
+      eventCount: 2,
+      finalBoard: [],
+    });
+    expect(c.getView().result).toBeNull();
+    c.advance(10);
+    expect(c.getView()).toMatchObject({
+      state: "Finished",
+      status: "Overtime",
+      consistency: null,
+    });
+  });
+
+  it("Execution Error from pass 1 is also deferred until the last event", () => {
+    const { c, sessions } = mk();
+    c.play();
+    sessions[0]!.o.onFinish({
+      status: "Execution Error",
+      kind: "operation",
+      message: "x",
+      computeMs: 1,
+      eventCount: 1,
+    });
+    sessions[1]!.o.onEvents!(batch(put(0, 1)));
+    sessions[1]!.o.onFinish({
+      status: "Execution Error",
+      kind: "operation",
+      message: "x",
+      computeMs: 1,
+      eventCount: 1,
+    });
+    expect(c.getView().state).toBe("Draining");
+    c.advance(10);
+    expect(c.getView()).toMatchObject({
+      state: "Finished",
+      status: "Execution Error",
+    });
+  });
+
+  it("different eventCount or finalBoard between passes raises a consistency warning", () => {
+    const { c, sessions } = mk();
+    c.play();
+    sessions[0]!.o.onFinish({
+      status: "Successful",
+      computeMs: 1,
+      eventCount: 3,
+      finalBoard: [],
+    });
+    sessions[1]!.o.onEvents!(batch(put(0, 1)));
+    sessions[1]!.o.onFinish({
+      status: "Successful",
+      computeMs: 1,
+      eventCount: 4,
+      finalBoard: [],
+    });
+    c.advance(10);
+    expect(c.getView().consistency).toEqual({
+      eventCount: [3, 4],
+      finalBoard: [[], []],
+    });
+  });
+
+  it("Stop during Measuring returns to Idle/Cancelled and ignores a late finish", () => {
+    const { c, sessions } = mk();
+    c.play();
+    const s1 = sessions[0]!;
+    c.stop();
+    expect(s1.stopped).toBe(true);
+    expect(c.getView()).toMatchObject({ state: "Idle", status: "Cancelled" });
+    s1.o.onFinish(OK);
+    expect(sessions).toHaveLength(1);
+    expect(c.getView().state).toBe("Idle");
   });
 });

@@ -23,6 +23,7 @@ import { ResultOverlay, StatusLine } from "./overlay";
 import { ConfigPanel, noBenchmarkMessage, type SolverEntry } from "./panels";
 import { OpsChart } from "./ops-chart";
 import { VirtualTracer } from "./virtual-tracer";
+import { MeasuringOverlay } from "./measuring-overlay";
 
 const fatal = (root: HTMLElement, msg: string): void =>
   root.replaceChildren(h("p", { class: "fatal" }, msg));
@@ -148,6 +149,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
 
   const canvas = h("canvas", { class: "board", "aria-label": "Chess board" });
   const overlay = new ResultOverlay();
+  const measuring = new MeasuringOverlay();
   const status = new StatusLine(() => overlay.reopen());
   const opsChart = new OpsChart();
   const tracer = new VirtualTracer((i) => ctrl.getEvent(i));
@@ -160,7 +162,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       h(
         "section",
         { class: "center" },
-        h("div", { class: "board-wrap" }, canvas, overlay.el),
+        h("div", { class: "board-wrap" }, canvas, overlay.el, measuring.el),
         status.el,
         opsChart.el,
       ),
@@ -180,6 +182,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     opsChart.update(v.opCounts);
     panel.setControls(v, canRun());
     overlay.update(v.result);
+    measuring.update(v.state === "Measuring");
     status.update(v, {
       canReopen: overlay.isDismissed,
       notice: blockReason(),

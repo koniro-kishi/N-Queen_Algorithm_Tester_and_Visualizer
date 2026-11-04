@@ -3,7 +3,13 @@
 // except Next at the frontier, which raises the permit by one (design 5.4).
 import { Board } from "../Board/board";
 import { HistoryStore } from "../Visualization/history";
-import { decodeEvent, OP_PUT, OP_REMOVE, type DecodedEvent } from "./protocol";
+import {
+  decodeEvent,
+  OP_PUT,
+  OP_REMOVE,
+  type DecodedEvent,
+  PERMIT_UNLIMITED,
+} from "./protocol";
 import {
   Session,
   type SessionOptions,
@@ -13,6 +19,7 @@ import {
 
 export type ControllerState =
   | "Idle"
+  | "Measuring"
   | "Running"
   | "Paused"
   | "Draining"
@@ -32,6 +39,11 @@ export interface OpCounts {
   put: number;
   remove: number;
   check: number;
+}
+
+export interface RunConsistency {
+  eventCount: [number, number]; // [pass 1 (measuring), pass 2 (trace)]
+  finalBoard: [string[] | undefined, string[] | undefined];
 }
 
 export interface ControllerConfig {
@@ -65,6 +77,7 @@ export interface ControllerView {
   currentEvent: DecodedEvent | null;
   /** Operations among events [0, cursor). Follows Back/Next. */
   opCounts: OpCounts;
+  consistency: RunConsistency | null;
   /** Terminal result once it is known and may be shown (see 6.5 / I6). */
   result: SessionResult | null;
   /** Status line text. */
@@ -77,6 +90,7 @@ export interface ControllerOptions {
   createWorker: WorkerFactory;
   sessionFactory?: SessionFactory;
   chunkSize?: number;
+  measureFirst?: boolean; // default true
 }
 
 export class SessionController {
@@ -92,6 +106,9 @@ export class SessionController {
   private pendingResult?: SessionResult; // Successful / Invalid Solution, waiting for playback to reach the end
   private result: SessionResult | null = null;
   private pendingSteps = 0;
+  private measured?: SessionResult;
+  private afterMeasure?: "play" | "next";
+  private consistency: RunConsistency | null = null;
   private statusOverride?: string;
   private listeners = new Set<(v: ControllerView) => void>();
 
@@ -125,6 +142,7 @@ export class SessionController {
       firstIndex: this.history.firstIndex,
       truncated: this.history.truncated,
       opCounts: this.counts,
+      consistency: this.consistency,
       maxEventReached: this.maxEventReached,
       currentEvent: cur,
       result: this.result,
@@ -149,6 +167,8 @@ export class SessionController {
     switch (this.state) {
       case "Idle":
         return { back: false, next: !only, stop: false, playPause: "play" };
+      case "Measuring":
+        return { back: false, next: false, stop: true, playPause: "off" };
       case "Running":
         return {
           back: false,
@@ -175,8 +195,12 @@ export class SessionController {
   // ---- user actions ------------------------------------------------------------------------
   play(): void {
     if (this.state === "Idle") {
-      this.startSession(this.o.config.lookaheadEvents);
-      this.state = "Running";
+      if (this.problem.onlyShowResult || this.o.measureFirst === false) {
+        this.startSession(this.o.config.lookaheadEvents);
+        this.state = "Running";
+      } else {
+        this.startMeasure("play");
+      }
     } else if (this.state === "Paused") {
       this.pendingSteps = 0;
       this.state = this.solverDone ? "Draining" : "Running";
@@ -194,9 +218,13 @@ export class SessionController {
   next(): void {
     if (!this.controls().next) return;
     if (this.state === "Idle") {
-      this.startSession(1); // Next from Idle starts the solver and shows event 1
-      this.state = "Paused";
-      this.pendingSteps = 1;
+      if (this.o.measureFirst === false) {
+        this.startSession(1);
+        this.state = "Paused";
+        this.pendingSteps = 1;
+      } else {
+        this.startMeasure("next");
+      }
     } else if (this.cursor < this.history.length) {
       this.applyForward();
       this.afterMove(false);
@@ -281,6 +309,9 @@ export class SessionController {
     this.maxEventReached = 0;
     this.solverDone = false;
     this.pendingResult = undefined;
+    this.measured = undefined;
+    this.afterMeasure = undefined;
+    this.consistency = null;
     this.result = null;
     this.pendingSteps = 0;
     this.statusOverride = undefined;
@@ -311,6 +342,47 @@ export class SessionController {
     s.start();
   }
 
+  private startMeasure(after: "play" | "next"): void {
+    this.statusOverride = undefined;
+    this.afterMeasure = after;
+    this.state = "Measuring";
+    const p = this.problem;
+    const factory: SessionFactory =
+      this.o.sessionFactory ?? ((o) => new Session(o));
+    const s: SessionLike = factory({
+      n: p.n,
+      preplaced: p.preplaced,
+      moduleUrl: p.moduleUrl,
+      timeoutSeconds: p.timeoutSeconds,
+      cutoffSeconds: p.cutoffSeconds,
+      recordEvents: false, // same path as the benchmark
+      initialPermit: PERMIT_UNLIMITED,
+      createWorker: this.o.createWorker,
+      onFinish: (r) => {
+        if (this.session === s) this.handleMeasured(r);
+      },
+    });
+    this.session = s;
+    s.start();
+  }
+
+  private handleMeasured(r: SessionResult): void {
+    if (r.status === "Cancelled") return;
+    this.measured = r;
+    this.session = undefined;
+    const after = this.afterMeasure;
+    this.afterMeasure = undefined;
+    if (after === "next") {
+      this.startSession(1);
+      this.state = "Paused";
+      this.pendingSteps = 1;
+    } else {
+      this.startSession(this.o.config.lookaheadEvents);
+      this.state = "Running";
+    }
+    this.emit();
+  }
+
   private handleEvents(events: Uint32Array): void {
     this.history.append(events, this.cursor);
     if (this.state === "Paused") {
@@ -324,13 +396,19 @@ export class SessionController {
   }
 
   private handleFinish(r: SessionResult): void {
-    if (r.status === "Cancelled") return; // our own stop(); already reset
+    if (r.status === "Cancelled") return;
     this.solverDone = true;
     this.session = undefined;
     this.pendingSteps = 0;
     if (this.problem.onlyShowResult && "finalBoard" in r && r.finalBoard)
       this.showFinalBoard(r.finalBoard);
-    if (r.status === "Failed" || r.status === "Execution Error") {
+    if (this.measured) {
+      // Step mode: pass 1 is the official result; pass 2 only supplies the trace.
+      this.consistency = compareRuns(this.measured, r);
+      this.pendingResult = this.measured;
+      if (this.state === "Running") this.state = "Draining";
+      this.finalizeIfDone();
+    } else if (r.status === "Failed" || r.status === "Execution Error") {
       this.result = r; // timeouts and errors are shown immediately (I6)
       this.state = "Finished";
     } else {
@@ -400,4 +478,19 @@ export class SessionController {
       this.state = "Finished";
     }
   }
+}
+
+/** null when the two passes agree (or one of them has no event count, e.g. killed at the cutoff). */
+function compareRuns(
+  a: SessionResult,
+  b: SessionResult,
+): RunConsistency | null {
+  if (!("eventCount" in a) || !("eventCount" in b)) return null;
+  const fa = "finalBoard" in a ? a.finalBoard : undefined;
+  const fb = "finalBoard" in b ? b.finalBoard : undefined;
+  const same =
+    a.eventCount === b.eventCount && JSON.stringify(fa) === JSON.stringify(fb);
+  return same
+    ? null
+    : { eventCount: [a.eventCount, b.eventCount], finalBoard: [fa, fb] };
 }

@@ -152,6 +152,7 @@ export class StatusLine {
   private readonly instance = h("span", { class: "muted" });
   private readonly truncated = h("p", { class: "note" });
   private readonly notice = h("p", { class: "note warn" });
+  private readonly consistency = h("div", { class: "note warn" });
   private readonly reopenBtn = h(
     "button",
     { type: "button", class: "link" },
@@ -163,7 +164,14 @@ export class StatusLine {
     this.el = h(
       "div",
       { class: "status", "aria-live": "polite" },
-      h("div", { class: "status-main" }, this.state, this.pos, this.reopenBtn),
+      h(
+        "div",
+        { class: "status-main" },
+        this.state,
+        this.pos,
+        this.reopenBtn,
+        this.consistency,
+      ),
       this.instance,
       this.truncated,
       this.notice,
@@ -184,5 +192,27 @@ export class StatusLine {
       : "";
     this.notice.hidden = !x.notice;
     this.notice.textContent = x.notice ?? "";
+    const c = v.consistency;
+    this.consistency.hidden = !c;
+    if (c) {
+      const fmt = (b?: string[]) => (b ? b.join("\n") : "(none)");
+      this.consistency.replaceChildren(
+        h(
+          "p",
+          {},
+          `Warning: the measuring pass and the trace pass differ (eventCount ${c.eventCount[0].toLocaleString("en-US")} vs ${c.eventCount[1].toLocaleString("en-US")}). The solver may be non-deterministic. Compute time comes from the measuring pass; the trace comes from the second pass.`,
+        ),
+        h(
+          "details",
+          {},
+          h("summary", {}, "Show finalBoard of both passes"),
+          h(
+            "pre",
+            {},
+            `Pass 1 (measuring):\n${fmt(c.finalBoard[0])}\n\nPass 2 (trace):\n${fmt(c.finalBoard[1])}`,
+          ),
+        ),
+      );
+    }
   }
 }

@@ -48,6 +48,7 @@ export async function runS4(
   const controller = new SessionController({
     config,
     createWorker: browserWorkerFactory,
+    measureFirst: false,
     problem: {
       n,
       preplaced: inst.queens,
