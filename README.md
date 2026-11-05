@@ -32,6 +32,7 @@ With a native toolchain: `npm run build:solvers -- --native`.
 | `npm run dev` | Vite dev server with COOP/COEP headers |
 | `npm run build:solvers` | Compiles all solvers to WASM, writes `Solver/dist/manifest.json` |
 | `npm run bench` | Regenerates `Tester/timelimit.csv` and `Tester/timelimit.meta.json` |
+| `npm run bench:wall` | Regenerates `Tester/timelimit-walled.csv` and `Tester/timelimit-walled.meta.json` |
 | `npm test` | Vitest unit tests |
 | `npm run typecheck` | TypeScript check |
 | `npm run build` / `npm run preview` | Vite production build / preview |
@@ -91,6 +92,18 @@ npm run bench -- [--solver backtracking] [--k 20] [--cap <seconds>] [--nmin 4] [
 ```
 
 It also writes `timelimit.meta.json` (machine, Node version, date, K, cap, discarded pairs). A full run takes several minutes.
+
+**Walled N-Queen** has its own file, `Tester/timelimit-walled.csv` (header `N,P,W,limit`), because (N, P) alone cannot key a walled instance. `npm run bench:wall` runs the same harness in walled mode:
+
+```
+npm run bench:wall -- [--max-wall-fraction 0.25] [--solver backtracking] [--k 20] [--cap <seconds>] [--nmin 4] [--nmax 20] [--out Tester/timelimit-walled.csv]
+```
+
+For each N it samples a **sparse** grid of wall counts (spread over `1 .. floor(N^2 * maxWallFraction)`) and crosses it with P = 0..3, K seeds each. The (N, P, W) space is far too large to enumerate exhaustively, so the grid is fixed by `WALL_FRACTIONS` in `driver/bench/walled-grid.ts`. Each instance comes from the same deterministic generator the app uses (`generateWalled`), so `W`, `Q` and the witness match a run in the browser.
+
+A (N, P, W) is skipped (no CSV row) when the generator cannot build an instance for a seed (for example W too small for Q > N) or when any seed exceeds `benchCapSeconds`. The metadata records every skipped cell with its reason, plus the generator version and target fraction. W only counts W ≥ 1; W = 0 is the classic N-Queen and stays in `timelimit.csv`.
+
+Since a walled limit is only usable when the app can regenerate the same instance, the app's W field is validated against this file: a W that is not a benchmarked value disables Place with the message from `noBenchmarkMessage`.
 
 Things to know:
 
@@ -242,15 +255,17 @@ driver/
   main.ts                     mounts the app
   vite.config.ts              COOP/COEP headers for dev and preview
   scripts/build-solvers.mjs   emcc/em++ wrapper (Docker or native), writes the manifest
-  bench/benchmark.ts          benchmark harness (npm run bench)
+  bench/benchmark.ts          benchmark harness, classic and walled (npm run bench / bench:wall)
+  bench/walled-grid.ts        sparse W grid sampled by the walled benchmark
   spike.ts, spikes/           browser spikes S1 to S4b (not loaded by index.html)
 Tester/
-  Board/                      board, validator, preplaced generator, PRNG
+  Board/                      board, segments, validator, preplaced generator, walled generator, instance, PRNG
   Configuration/              tester.config.json, config and CSV parsing
   Execution/                  session, session controller, worker adapter, protocol, core/run-solver
   Visualization/              history, playback, renderer, highlight rules
   UI/                         app wiring, config panel, tracer, overlay, styles
-  timelimit.csv               benchmark limits (generated)
+  timelimit.csv               classic benchmark limits (generated)
+  timelimit-walled.csv        Walled N-Queen benchmark limits (generated)
 Solver/
   include/                    nqueen_api.h, nqueen_runtime.cpp, nqueen_host.js
   backtracking/               default solver

@@ -319,12 +319,10 @@ export class SessionController {
     this.statusOverride = undefined;
   }
 
-  private startSession(initialPermit: number): void {
-    this.statusOverride = undefined; // "Cancelled" only lasts until the next run starts
+  /** Fields both passes must share: measuring and tracing have to solve the exact same problem. */
+  private baseSessionOptions() {
     const p = this.problem;
-    const factory: SessionFactory =
-      this.o.sessionFactory ?? ((o) => new Session(o));
-    const s: SessionLike = factory({
+    return {
       n: p.n,
       preplaced: p.preplaced,
       walls: p.walls,
@@ -332,9 +330,19 @@ export class SessionController {
       moduleUrl: p.moduleUrl,
       timeoutSeconds: p.timeoutSeconds,
       cutoffSeconds: p.cutoffSeconds,
+      createWorker: this.o.createWorker,
+    };
+  }
+
+  private startSession(initialPermit: number): void {
+    this.statusOverride = undefined; // "Cancelled" only lasts until the next run starts
+    const p = this.problem;
+    const factory: SessionFactory =
+      this.o.sessionFactory ?? ((o) => new Session(o));
+    const s: SessionLike = factory({
+      ...this.baseSessionOptions(),
       recordEvents: !p.onlyShowResult,
       initialPermit,
-      createWorker: this.o.createWorker,
       onEvents: (ev) => {
         if (this.session === s) this.handleEvents(ev);
       },
@@ -350,18 +358,12 @@ export class SessionController {
     this.statusOverride = undefined;
     this.afterMeasure = after;
     this.state = "Measuring";
-    const p = this.problem;
     const factory: SessionFactory =
       this.o.sessionFactory ?? ((o) => new Session(o));
     const s: SessionLike = factory({
-      n: p.n,
-      preplaced: p.preplaced,
-      moduleUrl: p.moduleUrl,
-      timeoutSeconds: p.timeoutSeconds,
-      cutoffSeconds: p.cutoffSeconds,
+      ...this.baseSessionOptions(),
       recordEvents: false, // same path as the benchmark
       initialPermit: PERMIT_UNLIMITED,
-      createWorker: this.o.createWorker,
       onFinish: (r) => {
         if (this.session === s) this.handleMeasured(r);
       },
