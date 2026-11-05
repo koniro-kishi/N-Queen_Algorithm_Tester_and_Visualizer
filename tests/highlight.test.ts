@@ -68,6 +68,38 @@ describe('computeHighlight', () => {
   });
 });
 
+describe('computeHighlight with walls', () => {
+  it('a queen behind a wall is not an attacker; the one in the open is', () => {
+    const b = new Board(5, [[0, 2]]);          // wall on row 0
+    b.put(0, 0);
+    b.put(2, 4);
+    const { view, e } = put(b, 0, 4);          // row: wall at (0,2) cuts (0,0); column: (2,4) attacks
+    const h = computeHighlight(view, e);
+    expect(h.kind).toBe('conflict');
+    expect(h.cells.map((c) => [c.x, c.y])).toEqual([[0, 4], [2, 4]]);
+  });
+
+  it('a queen whose only line-mates are behind walls is valid, not in conflict', () => {
+    const b = new Board(4, [[0, 1]]);
+    b.put(0, 0);
+    const { view, e } = put(b, 0, 2);
+    expect(e.valid).toBe(true);
+    expect(computeHighlight(view, e).kind).toBe('valid');
+  });
+
+  it('diagonal wall cut; conflict persisting elsewhere gives conflict-elsewhere', () => {
+    const b = new Board(5, [[1, 1]]);
+    b.put(3, 1); b.put(3, 4);                  // row 3 conflict
+    const { view, e } = put(b, 0, 0);          // diagonal to (2,2)? none placed; nobody attacks (0,0)
+    expect(e.valid).toBe(false);
+    expect(computeHighlight(view, e).kind).toBe('conflict-elsewhere');
+    const b2 = new Board(5, [[1, 1]]);
+    b2.put(2, 2);
+    const r = put(b2, 0, 0);                   // wall (1,1) between (0,0) and (2,2)
+    expect(computeHighlight(r.view, r.e).kind).toBe('valid');
+  });
+});
+
 describe('describeEvent', () => {
   it('formats tracer rows like the design', () => {
     expect(describeEvent(1233, decodeEvent(encodeEvent(3, 5, OP_PUT, true, 0)))).toBe('#1234  PUT (3,5)  valid');

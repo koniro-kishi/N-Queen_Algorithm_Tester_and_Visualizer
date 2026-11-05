@@ -1,4 +1,5 @@
 // Highlight rules (design 6.3). Pure functions of (display board view, event): Back/Next restore them exactly.
+// Walled N-Queen: a 'W' cell strictly between two queens on one line cuts the attack, so that queen is not an attacker.
 import type { DecodedEvent } from "../Execution/protocol";
 import { OP_PUT, OP_CHECK } from "../Execution/protocol";
 
@@ -31,8 +32,24 @@ export interface Highlight {
 
 export const NO_HIGHLIGHT: Highlight = { kind: "none", cells: [] };
 
+/** True when a wall lies strictly between (r1,c1) and (r2,c2), which must share a row, column or diagonal. */
+function wallBetween(
+  view: readonly string[],
+  r1: number,
+  c1: number,
+  r2: number,
+  c2: number,
+): boolean {
+  const dr = Math.sign(r2 - r1);
+  const dc = Math.sign(c2 - c1);
+  for (let r = r1 + dr, c = c1 + dc; r !== r2 || c !== c2; r += dr, c += dc) {
+    if (view[r]?.[c] === "W") return true;
+  }
+  return false;
+}
+
 /**
- * @param view  display board AFTER the event was applied: N strings of 'Q' / 'x'.
+ * @param view  display board AFTER the event was applied: N strings of 'Q' / 'x' / 'W'.
  * @param event the event at cursor - 1, or null when the cursor is at the start.
  */
 export function computeHighlight(
@@ -59,7 +76,10 @@ export function computeHighlight(
     const row = view[r]!;
     for (let c = 0; c < row.length; c++) {
       if (row[c] !== "Q" || (r === x && c === y)) continue;
-      if (r === x || c === y || Math.abs(r - x) === Math.abs(c - y)) {
+      if (
+        (r === x || c === y || Math.abs(r - x) === Math.abs(c - y)) &&
+        !wallBetween(view, x, y, r, c)
+      ) {
         attackers.push({ x: r, y: c, fill: "conflict", outline: false });
       }
     }

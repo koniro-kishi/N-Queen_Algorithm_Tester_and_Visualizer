@@ -69,6 +69,14 @@ const rowMajor = (a: Cell, b: Cell): number => a[0] - b[0] || a[1] - b[1];
 /** Largest W the board can hold while still leaving room for N + 1 queens. */
 export const maxWallsForN = (n: number): number => n * n - (n + 1);
 
+/** Walled N-Queen allows 0..3 preplaced queens. Fixed by design: not configurable, not to change in later phases. */
+export const WALLED_MIN_P = 0;
+export const WALLED_MAX_P = 3;
+
+/** Largest W the UI accepts for board size n: floor(n^2 * maxWallFraction), never above maxWallsForN. */
+export const maxWallsByFraction = (n: number, fraction: number): number =>
+  Math.min(maxWallsForN(n), Math.floor(n * n * fraction));
+
 function pickWalls(n: number, w: number, rng: () => number): Cell[] {
   const idx = Array.from({ length: n * n }, (_, i) => i);
   for (let i = 0; i < w; i++) {
