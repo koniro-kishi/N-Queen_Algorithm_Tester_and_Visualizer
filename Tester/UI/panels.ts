@@ -37,8 +37,8 @@ export interface ConfigPanelOptions {
     delayMs: number;
   };
   hasBenchmark(n: number, p: number, w: number): boolean;
-  /** Largest W accepted for board size n (floor(n^2 * maxWallFraction), config file). */
-  maxWalls(n: number): number;
+  /** W > 0 values with a benchmark row for (n, p). W = 0 (classic) is always offered separately. */
+  availableWalls(n: number, p: number): number[];
   /** Why no instance can be built for (n, p, w, seed), or undefined when one exists. W = 0 is always buildable. */
   feasibility(n: number, p: number, w: number, seed: number): string | undefined;
   on: {
@@ -67,7 +67,7 @@ export class ConfigPanel {
     step: "1",
   });
   private readonly pIn = h("input", { type: "number", min: "0", step: "1" });
-  private readonly wIn = h("input", { type: "number", min: "0", step: "1" });
+  private readonly wSel = h("select");
   private readonly seedIn = h("input", { type: "number", min: "0", step: "1" });
   private readonly solverSel = h("select");
   private readonly onlyChk = h("input", { type: "checkbox" });
@@ -95,7 +95,7 @@ export class ConfigPanel {
     const i = o.initial;
     this.nIn.value = String(i.n);
     this.pIn.value = String(i.p);
-    this.wIn.value = String(i.w);
+    this.populateWalls(String(i.w));
     this.seedIn.value = String(i.seed);
     for (const s of o.solvers) {
       const tag =
@@ -108,13 +108,18 @@ export class ConfigPanel {
     this.slider.value = String(delayMsToSlider(i.delayMs));
 
     const on = o.on;
-    for (const el of [this.nIn, this.pIn, this.wIn, this.seedIn])
-      el.addEventListener("input", () => this.refresh());
+    for (const el of [this.nIn, this.pIn])
+      el.addEventListener("input", () => {
+        this.populateWalls();
+        this.refresh();
+      });
+    this.wSel.addEventListener("change", () => this.refresh());
+    this.seedIn.addEventListener("input", () => this.refresh());
     this.resizeBtn.addEventListener("click", () => {
       const r = this.read();
       if (!r.nOk) return;
       this.pIn.value = "0"; // Resize gives an empty board of the new size
-      this.wIn.value = "0";
+      this.populateWalls("0");
       this.refresh();
       on.resize(r.n);
     });
@@ -148,11 +153,11 @@ export class ConfigPanel {
       this.buildErr,
       h(
         "div",
-        { class: "row3" },
+        { class: "row2" },
         field("N", this.nIn),
         field("P", this.pIn),
-        field("W (walls)", this.wIn),
       ),
+      field("W (walls)", this.wSel),
       h(
         "details",
         { class: "advanced" },
@@ -210,39 +215,47 @@ export class ConfigPanel {
     this.ppBtn.disabled = c.playPause === "off" || (idle && !canRun);
   }
 
+  /** Rebuilds the wall options from the CSV-backed list for the current N and P, keeping the selection if possible. */
+  private populateWalls(preferred = this.wSel.value): void {
+    const n = num(this.nIn.value);
+    const p = num(this.pIn.value);
+    const nOk = Number.isInteger(n) && n >= MIN_N && n <= MAX_N;
+    const pOk = Number.isInteger(p) && p >= 0 && p <= WALLED_MAX_P;
+    const walls = nOk && pOk ? this.o.availableWalls(n, p) : [];
+    const values = [0, ...walls];
+    this.wSel.replaceChildren(
+      ...values.map((w) =>
+        h("option", { value: String(w) }, w === 0 ? "0 (classic)" : String(w)),
+      ),
+    );
+    this.wSel.value = values.map(String).includes(preferred) ? preferred : "0";
+  }
+
   private read() {
     const n = num(this.nIn.value);
     const p = num(this.pIn.value);
-    const w = num(this.wIn.value);
+    const w = num(this.wSel.value);
     const seed = num(this.seedIn.value);
     const nOk = Number.isInteger(n) && n >= MIN_N && n <= MAX_N;
-    const wMax = nOk ? this.o.maxWalls(n) : 0;
-    const wOk = nOk && Number.isInteger(w) && w >= 0 && w <= wMax;
+    const wOk = Number.isInteger(w) && w >= 0;
     // With walls (W > 0) the preplaced range is fixed at 0..WALLED_MAX_P; without walls it is 0..N-1.
     const pMax = !nOk ? 0 : wOk && w > 0 ? WALLED_MAX_P : n - 1;
     const pOk = nOk && Number.isInteger(p) && p >= 0 && p <= pMax;
     const seedOk = Number.isInteger(seed) && seed >= 0;
-    return { n, p, w, seed, nOk, wOk, pOk, seedOk, wMax, pMax };
+    return { n, p, w, seed, nOk, wOk, pOk, seedOk, pMax };
   }
 
   private refresh(): void {
     const r = this.read();
-    if (r.nOk) {
-      this.pIn.max = String(r.pMax);
-      this.wIn.max = String(r.wMax);
-    }
+    if (r.nOk) this.pIn.max = String(r.pMax);
     const notes: string[] = [];
     if (!r.nOk) notes.push(`N must be an integer from ${MIN_N} to ${MAX_N}.`);
-    else {
-      if (!r.wOk)
-        notes.push(`W must be an integer from 0 to ${r.wMax} (0 = classic N-Queen).`);
-      if (!r.pOk)
-        notes.push(
-          r.wOk && r.w > 0
-            ? `With walls, P must be an integer from 0 to ${WALLED_MAX_P}.`
-            : `P must be an integer from 0 to ${r.n - 1}.`,
-        );
-    }
+    else if (!r.pOk)
+      notes.push(
+        r.wOk && r.w > 0
+          ? `With walls, P must be an integer from 0 to ${WALLED_MAX_P}.`
+          : `P must be an integer from 0 to ${r.n - 1}.`,
+      );
     if (!r.seedOk) notes.push("Seed must be a non-negative integer.");
     else if (r.seed >= CANONICAL_SEEDS)
       notes.push(

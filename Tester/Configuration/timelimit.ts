@@ -114,3 +114,19 @@ export function effectiveWalledTimeout(
     ? undefined
     : Math.max(limit * cfg.toleranceFactor, cfg.minTimeoutSeconds);
 }
+
+/** Sorted W values that have a benchmark row for exactly (n, p). W = 0 (classic) is not included. */
+export function walledWallsFor(
+  limits: WalledTimeLimits,
+  n: number,
+  p: number,
+): number[] {
+  const prefix = `${n},${p},`;
+  const out: number[] = [];
+  for (const key of limits.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const w = Number(key.slice(prefix.length));
+    if (Number.isInteger(w) && w > 0) out.push(w);
+  }
+  return out.sort((a, b) => a - b);
+}

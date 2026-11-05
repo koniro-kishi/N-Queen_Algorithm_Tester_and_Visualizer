@@ -3,6 +3,7 @@ import { DEFAULT_MAX_WALL_FRACTION, validateConfig } from "../Tester/Configurati
 import {
   effectiveWalledTimeout,
   parseWalledTimelimitCsv,
+  walledWallsFor,
 } from "../Tester/Configuration/timelimit";
 import { maxWallsByFraction, maxWallsForN, WALLED_MAX_P } from "../Tester/Board/walled";
 
@@ -44,5 +45,23 @@ describe("timelimit-walled.csv", () => {
     expect(() => parseWalledTimelimitCsv("N,P,W,limit\n8,0,4,0\n")).toThrow(/limit/);
     expect(() => parseWalledTimelimitCsv("N,P,W,limit\n8,0,4\n")).toThrow(/4 fields/);
     expect(() => parseWalledTimelimitCsv("N,P,W,limit\n8,0,4,1\n8,0,4,2\n")).toThrow(/duplicate/);
+  });
+});
+
+describe("walledWallsFor", () => {
+  const t = parseWalledTimelimitCsv(
+    "N,P,W,limit\n8,0,16,1\n8,0,3,1\n8,0,10,1\n8,1,6,1\n12,2,20,1\n",
+  );
+
+  it("returns only the walls benchmarked for exactly (n, p), sorted, without classic 0", () => {
+    expect(walledWallsFor(t, 8, 0)).toEqual([3, 10, 16]);
+    expect(walledWallsFor(t, 8, 1)).toEqual([6]);
+    expect(walledWallsFor(t, 12, 2)).toEqual([20]);
+  });
+
+  it("returns an empty list for an unbenchmarked pair or P beyond the walled range", () => {
+    expect(walledWallsFor(t, 8, 2)).toEqual([]);
+    expect(walledWallsFor(t, 9, 0)).toEqual([]);
+    expect(walledWallsFor(t, 8, WALLED_MAX_P + 1)).toEqual([]);
   });
 });

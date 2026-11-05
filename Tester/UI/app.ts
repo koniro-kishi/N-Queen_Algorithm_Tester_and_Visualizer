@@ -6,7 +6,6 @@ import cfgRaw from "../Configuration/tester.config.json";
 import timelimitCsv from "../timelimit.csv?raw";
 import walledTimelimitCsv from "../timelimit-walled.csv?raw";
 import { InstanceCache } from "../Board/instance";
-import { maxWallsByFraction } from "../Board/walled";
 import { validateConfig } from "../Configuration/config";
 import {
   effectiveTimeout,
@@ -14,6 +13,7 @@ import {
   formatTimeout,
   parseTimelimitCsv,
   parseWalledTimelimitCsv,
+  walledWallsFor,
 } from "../Configuration/timelimit";
 import {
   SessionController,
@@ -138,7 +138,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       delayMs: cfg.defaultStepDelayMs,
     },
     hasBenchmark: (n, p, w) => timeoutAt(n, p, w) !== undefined,
-    maxWalls: (n) => maxWallsByFraction(n, cfg.maxWallFraction),
+    availableWalls: (n, p) => walledWallsFor(walledLimits, n, p),
     feasibility: (n, p, w, seed) => {
       const b = instances.get(n, p, w, seed);
       return b.ok ? undefined : b.reason;

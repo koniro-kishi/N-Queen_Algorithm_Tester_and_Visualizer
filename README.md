@@ -103,7 +103,7 @@ For each N it samples a **sparse** grid of wall counts (spread over `1 .. floor(
 
 A (N, P, W) is skipped (no CSV row) when the generator cannot build an instance for a seed (for example W too small for Q > N) or when any seed exceeds `benchCapSeconds`. The metadata records every skipped cell with its reason, plus the generator version and target fraction. W only counts W ≥ 1; W = 0 is the classic N-Queen and stays in `timelimit.csv`.
 
-Since a walled limit is only usable when the app can regenerate the same instance, the app's W field is validated against this file: a W that is not a benchmarked value disables Place with the message from `noBenchmarkMessage`.
+Since a walled limit is only usable when the app can regenerate the same instance, the app's **W (walls)** control is a dropdown populated from this file: it lists only the W values benchmarked for the current (N, P), plus `0 (classic)` for the classic N-Queen.
 
 Things to know:
 
