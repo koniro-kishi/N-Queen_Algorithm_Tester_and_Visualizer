@@ -3,8 +3,11 @@
 // An instance is (N, P, W, seed). Generation is witness-first:
 //   1. pick W wall cells (seeded),
 //   2. search for a witness: a set of Q > N queens, no two attacking (walls cut attacks),
-//   3. Q := size of the witness found (the target; NOT proven maximum),
-//   4. preplaced queens := P queens of the witness.
+//   3. Q := N + ceil((Q_found - N) * f), where Q_found is the size of the witness found and f is the target
+//      fraction. Q is a target below what the search reached (and far below any proven maximum), so a
+//      solver weaker than the search can still reach it. The witness is cut down to Q queens: a subset of a
+//      conflict-free set is conflict-free.
+//   4. preplaced queens := P queens of that witness.
 // An instance that was generated therefore has a known solution, so it is feasible by construction.
 //
 // Reproducibility: the search is bounded by step counts, never by wall-clock time, and draws only from a
@@ -15,7 +18,13 @@ import { MAX_N, MIN_N } from './preplaced';
 import { mulberry32, randInt } from './rng';
 import { validateBoard } from './validator';
 
-export const GENERATOR_VERSION = 'walled-v1';
+export const GENERATOR_VERSION = 'walled-v2';
+
+/**
+ * Default f in Q = N + ceil((Q_found - N) * f), 0 < f <= 1. Part of the generator definition (see
+ * GENERATOR_VERSION): changing it changes every Q.
+ */
+export const TARGET_FRACTION = 0.5;
 
 /** Search budgets. Part of the generator definition (see GENERATOR_VERSION). */
 export const WITNESS_BUDGET = {
@@ -33,13 +42,17 @@ export interface WalledInstance {
   p: number;
   w: number;
   seed: number;
+  /** Fraction f that turned Q_found into q. */
+  fraction: number;
+  /** Size of the best witness the search found (before applying `fraction`). */
+  qFound: number;
   /** Target number of queens (> n). Feasible: `witness` reaches it. Not claimed to be the maximum. */
   q: number;
   /** Wall cells, row-major order. */
   walls: Cell[];
   /** The P preplaced queens (a subset of `witness`), row-major order. */
   queens: Cell[];
-  /** A full solution with q queens, row-major order. */
+  /** A solution with exactly q queens, row-major order. */
   witness: Cell[];
 }
 
@@ -129,11 +142,18 @@ function growWitness(n: number, walls: Cell[], rng: () => number): Cell[] | null
  * WalledInfeasibleError when no instance with Q > N exists within the search budget (e.g. too few walls)
  * or when P > Q - 1.
  */
-export function generateWalled(n: number, p: number, w: number, seed: number): WalledInstance {
+export function generateWalled(
+  n: number,
+  p: number,
+  w: number,
+  seed: number,
+  fraction: number = TARGET_FRACTION,
+): WalledInstance {
   if (!Number.isInteger(n) || n < MIN_N || n > MAX_N) throw new RangeError(`N must be an integer in [${MIN_N}, ${MAX_N}]`);
   if (!Number.isInteger(w) || w < 0 || w > maxWallsForN(n)) throw new RangeError(`W must be an integer in [0, ${maxWallsForN(n)}]`);
   if (!Number.isInteger(p) || p < 0) throw new RangeError('P must be a non-negative integer');
   if (!Number.isInteger(seed) || seed < 0) throw new RangeError('seed must be a non-negative integer');
+  if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1) throw new RangeError('fraction must be in (0, 1]');
 
   const rng = mulberry32(seed);
   let walls: Cell[] = [];
@@ -145,13 +165,20 @@ export function generateWalled(n: number, p: number, w: number, seed: number): W
   if (!witness) {
     throw new WalledInfeasibleError(`No placement of more than ${n} queens found for N=${n}, W=${w}, seed ${seed}`);
   }
-  witness = [...witness].sort(rowMajor);
-  const q = witness.length;
+  const qFound = witness.length;
+  // epsilon guards against float noise such as 3 * 0.1 = 0.30000000000000004 rounding up
+  const q = n + Math.ceil((qFound - n) * fraction - 1e-9);
+  const shuffled = (len: number): number[] => {
+    const order = Array.from({ length: len }, (_, i) => i);
+    for (let i = len - 1; i > 0; i--) { const j = randInt(rng, i + 1); [order[i], order[j]] = [order[j]!, order[i]!]; }
+    return order;
+  };
+  // Cut the witness down to q queens. Both shuffles are drawn before P is used, so q and the witness never depend on P.
+  const kept = shuffled(qFound).slice(0, q).map((i) => witness![i]!).sort(rowMajor);
+  const preOrder = shuffled(q);
   if (p > q - 1) throw new WalledInfeasibleError(`P=${p} exceeds Q-1=${q - 1} for N=${n}, W=${w}, seed ${seed}`);
-
-  const order = Array.from({ length: q }, (_, i) => i);
-  for (let i = q - 1; i > 0; i--) { const j = randInt(rng, i + 1); [order[i], order[j]] = [order[j]!, order[i]!]; }
-  const queens = order.slice(0, p).map((i) => witness![i]!).sort(rowMajor);
+  const queens = preOrder.slice(0, p).map((i) => kept[i]!).sort(rowMajor);
+  witness = kept;
 
   // Self-check with the independent validator: a generated instance must really be solved by its witness.
   const grid = Array.from({ length: n }, () => Array<string>(n).fill('x'));
@@ -160,5 +187,5 @@ export function generateWalled(n: number, p: number, w: number, seed: number): W
   const check = validateBoard(grid.map((r) => r.join('')), n, queens, { walls, target: q });
   if (!check.ok) throw new Error(`walled generator produced an invalid witness: ${check.message}`);
 
-  return { generator: GENERATOR_VERSION, n, p, w, seed, q, walls, queens, witness };
+  return { generator: GENERATOR_VERSION, n, p, w, seed, fraction, qFound, q, walls, queens, witness };
 }

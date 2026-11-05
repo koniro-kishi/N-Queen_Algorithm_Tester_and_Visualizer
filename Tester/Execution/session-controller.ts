@@ -28,6 +28,8 @@ export type ControllerState =
 export interface Problem {
   n: number;
   preplaced: Array<[number, number]>;
+  walls?: Array<[number, number]>;
+  target?: number;
   moduleUrl: string;
   /** Effective timeout in seconds. */
   timeoutSeconds: number;
@@ -296,7 +298,7 @@ export class SessionController {
 
   private reset(): void {
     this.history.clear();
-    const b = new Board(this.problem.n);
+    const b = new Board(this.problem.n, this.problem.walls ?? []);
     for (const [x, y] of this.problem.preplaced) {
       b.put(x, y);
       b.lock(x, y);
@@ -325,6 +327,8 @@ export class SessionController {
     const s: SessionLike = factory({
       n: p.n,
       preplaced: p.preplaced,
+      walls: p.walls,
+      target: p.target,
       moduleUrl: p.moduleUrl,
       timeoutSeconds: p.timeoutSeconds,
       cutoffSeconds: p.cutoffSeconds,
@@ -423,7 +427,7 @@ export class SessionController {
   private showFinalBoard(rows: string[]): void {
     const n = this.problem.n;
     if (rows.length !== n) return;
-    const b = new Board(n);
+    const b = new Board(n, this.problem.walls ?? []);
     rows.forEach((row, x) => {
       for (let y = 0; y < Math.min(n, row.length); y++)
         if (row[y] === "Q") b.put(x, y);

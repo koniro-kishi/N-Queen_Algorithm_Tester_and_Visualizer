@@ -4,7 +4,7 @@ import { buildSegments } from '../Tester/Board/segments';
 import { mulberry32, randInt } from '../Tester/Board/rng';
 import { validateBoard } from '../Tester/Board/validator';
 import {
-  generateWalled, GENERATOR_VERSION, maxWallsForN, WalledInfeasibleError,
+  generateWalled, GENERATOR_VERSION, maxWallsForN, TARGET_FRACTION, WalledInfeasibleError,
 } from '../Tester/Board/walled';
 
 /** Naive reference: pairs on one line attack unless a 'W' lies strictly between them. */
@@ -172,6 +172,41 @@ describe('generateWalled', () => {
         }
       }
     }
+  });
+
+  it('Q = N + ceil((Q_found - N) * f); the witness is cut down to exactly Q queens', () => {
+    for (const f of [0.1, 0.25, 0.5, 0.75, 1]) {
+      for (const [n, w, seed] of [[8, 8, 1], [12, 24, 2], [16, 40, 3]] as const) {
+        const inst = generateWalled(n, 0, w, seed, f);
+        expect(inst.fraction).toBe(f);
+        expect(inst.q).toBe(n + Math.ceil((inst.qFound - n) * f - 1e-9));
+        expect(inst.witness).toHaveLength(inst.q);
+        expect(inst.q).toBeGreaterThan(n);
+        expect(inst.q).toBeLessThanOrEqual(inst.qFound);
+        const b = new Board(n, inst.walls);
+        inst.witness.forEach(([x, y]) => b.put(x, y));
+        expect(b.pairs).toBe(0);
+      }
+    }
+  });
+
+  it('f = 1 keeps the whole witness; smaller f lowers Q but not the walls or Q_found', () => {
+    const full = generateWalled(12, 0, 24, 2, 1);
+    const half = generateWalled(12, 0, 24, 2, 0.5);
+    expect(full.q).toBe(full.qFound);
+    expect(half.qFound).toBe(full.qFound);
+    expect(half.walls).toEqual(full.walls);
+    expect(half.q).toBeLessThan(full.q);
+    expect(half.witness.every(([x, y]) => full.witness.some(([a, b]) => a === x && b === y))).toBe(true);
+  });
+
+  it('uses TARGET_FRACTION by default and keeps Q > N even for a tiny f', () => {
+    expect(generateWalled(10, 0, 12, 0).fraction).toBe(TARGET_FRACTION);
+    expect(generateWalled(10, 0, 12, 0, 0.001).q).toBeGreaterThan(10);
+  });
+
+  it('rejects f outside (0, 1]', () => {
+    for (const f of [0, -0.5, 1.01, NaN, Infinity]) expect(() => generateWalled(8, 0, 8, 0, f)).toThrow(RangeError);
   });
 
   it('without walls Q > N is impossible, so generation is reported infeasible', () => {

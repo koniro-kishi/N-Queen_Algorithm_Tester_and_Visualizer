@@ -42,6 +42,8 @@ function workerMain(): void {
       const outcome = await runSolver({
         n: msg.n,
         preplaced: msg.preplaced,
+        walls: msg.walls,
+        target: msg.target,
         recordEvents: msg.recordEvents,
         control: createControlBlock(msg.control),
         loadModule: async (): Promise<SolverModule> => {

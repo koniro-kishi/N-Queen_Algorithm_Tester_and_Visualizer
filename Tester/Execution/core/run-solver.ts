@@ -20,13 +20,18 @@ import {
 } from "../protocol";
 
 export interface SolverModule {
-  _nq_run(n: number): number;
+  /** n = board size, q = target queen count (Classic N-Queen: q = n). */
+  _nq_run(n: number, q: number): number;
 }
 
 export interface RunOptions {
   n: number;
-  /** Already on the board (and locked) when solve(n) is called. Not recorded as events. */
+  /** Already on the board (and locked) when solve(n, q) is called. Not recorded as events. */
   preplaced: ReadonlyArray<readonly [number, number]>;
+  /** Wall cells ('W'). Default: none (classic board). */
+  walls?: ReadonlyArray<readonly [number, number]>;
+  /** Target queen count q passed to the solver. Default: n. */
+  target?: number;
   /** Instantiates the WASM module. Excluded from compute time. */
   loadModule: () => Promise<SolverModule>;
   control: ControlBlock;
@@ -64,8 +69,9 @@ export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
   const now = opts.now ?? defaultNow;
   const waitOnPermit = opts.waitOnPermit ?? defaultWait;
   const target = (opts.hostTarget ?? globalThis) as Record<string, unknown>;
+  const q = opts.target ?? n;
 
-  const board = new Board(n);
+  const board = new Board(n, opts.walls ?? []);
   for (const [x, y] of preplaced) {
     board.put(x, y);
     board.lock(x, y);
@@ -164,7 +170,7 @@ export async function runSolver(opts: RunOptions): Promise<RunOutcome> {
     let returnCode = 0;
     let failure: { kind: ErrorKind; message: string } | undefined;
     try {
-      returnCode = mod._nq_run(n);
+      returnCode = mod._nq_run(n, q);
     } catch (e) {
       failure = { kind: classify(e), message: messageOf(e) };
     }

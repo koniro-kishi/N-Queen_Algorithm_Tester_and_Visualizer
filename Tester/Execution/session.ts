@@ -61,6 +61,8 @@ export type SessionResult =
 export interface SessionOptions {
   n: number;
   preplaced: Array<[number, number]>;
+  walls?: Array<[number, number]>;
+  target?: number;
   moduleUrl: string;
   /** Benchmark limit in seconds (tolerance and floor included). Exceeding it gives Overtime. */
   timeoutSeconds: number;
@@ -126,6 +128,8 @@ export class Session {
       moduleUrl: this.o.moduleUrl,
       n: this.o.n,
       preplaced: this.o.preplaced,
+      walls: this.o.walls,
+      target: this.o.target,
       recordEvents: this.o.recordEvents,
       control: this.control.sab,
     });
@@ -190,7 +194,10 @@ export class Session {
       });
       return;
     }
-    const v = validateBoard(out.finalBoard, this.o.n, this.o.preplaced);
+    const v = validateBoard(out.finalBoard, this.o.n, this.o.preplaced, {
+      walls: this.o.walls,
+      target: this.o.target,
+    });
     if (!v.ok) {
       this.finish({
         status: "Invalid Solution",
