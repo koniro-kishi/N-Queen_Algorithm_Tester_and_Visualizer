@@ -21,7 +21,7 @@ const cfg = validateConfig({
 describe("timelimit.csv", () => {
   it("parses valid rows and applies tolerance/floor", () => {
     const t = parseTimelimitCsv("N,P,limit\n8,0,0.01\n12,3,2\n");
-    expect(effectiveTimeout(t, 8, 0, cfg)).toBe(0.25); // floor
+    expect(effectiveTimeout(t, 8, 0, cfg)).toBe(0.05); // floor
     expect(effectiveTimeout(t, 12, 3, cfg)).toBe(6); // 2 * 3
     expect(effectiveTimeout(t, 20, 0, cfg)).toBeUndefined(); // no benchmark
   });

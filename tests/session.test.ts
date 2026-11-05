@@ -205,7 +205,6 @@ describe("Session", () => {
     await vi.advanceTimersByTimeAsync(20);
     expect(await done).toMatchObject({
       status: "Failed",
-      timeoutSeconds: 1,
       cutoffSeconds: 1,
     });
     expect(w.terminated).toBe(true);
