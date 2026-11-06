@@ -24,6 +24,7 @@ import { PlaybackEngine } from "../Visualization/playback";
 import { BoardRenderer } from "../Visualization/renderer";
 import { buildRenderState } from "../Visualization/render-state";
 import { h } from "./dom";
+import { MeasuringOverlay } from "./measuring-overlay";
 import { ResultOverlay, StatusLine } from "./overlay";
 import { ConfigPanel, noBenchmarkMessage, type SolverEntry } from "./panels";
 import { OpsChart } from "./ops-chart";
@@ -179,6 +180,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
 
   const canvas = h("canvas", { class: "board", "aria-label": "Chess board" });
+  const measuring = new MeasuringOverlay();
   const overlay = new ResultOverlay();
   const status = new StatusLine(() => overlay.reopen());
   const opsChart = new OpsChart();
@@ -192,7 +194,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       h(
         "section",
         { class: "center" },
-        h("div", { class: "board-wrap" }, canvas, overlay.el),
+        h("div", { class: "board-wrap" }, canvas, measuring.el, overlay.el),
         status.el,
         opsChart.el,
       ),
@@ -224,6 +226,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     tracer.update(v);
     opsChart.update(v.opCounts);
     panel.setControls(v, canRun());
+    measuring.update(v.state === "Measuring");
     overlay.update(v.result);
     status.update(v, {
       canReopen: overlay.isDismissed,
