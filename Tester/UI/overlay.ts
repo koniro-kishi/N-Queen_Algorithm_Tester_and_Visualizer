@@ -13,6 +13,7 @@ const RULE_LABEL: Record<Rule, string> = {
   column: "two queens share a column",
   diagonal: "two queens share a diagonal",
   preplaced: "a preplaced queen was moved or removed",
+  wall: "a wall was missing or altered",
 };
 
 const KIND_LABEL: Record<ErrorKind, string> = {

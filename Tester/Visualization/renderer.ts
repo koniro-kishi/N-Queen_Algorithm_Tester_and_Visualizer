@@ -7,9 +7,16 @@ export interface QueenCell {
   preplaced: boolean;
 }
 
+/** Walled N-Queen: a pawn ('W'). Holds no queen and cuts attacks. */
+export interface WallCell {
+  row: number;
+  col: number;
+}
+
 export interface RenderState {
   n: number;
   queens: ReadonlyArray<QueenCell>;
+  walls: ReadonlyArray<WallCell>;
   highlight: Highlight; // x = baris, y = kolom (konvensi proyek)
 }
 
@@ -25,6 +32,8 @@ export interface Palette {
   preplacedOutline: string;
   lock: string;
   border: string;
+  pawn: string;
+  pawnOutline: string;
 }
 
 export const DEFAULT_PALETTE: Palette = {
@@ -39,6 +48,8 @@ export const DEFAULT_PALETTE: Palette = {
   preplacedOutline: "#ffffff",
   lock: "#ffd23f",
   border: "#3f4f2f",
+  pawn: "#ffffff",
+  pawnOutline: "#1a1a1a",
 };
 
 export interface Layout {
@@ -63,6 +74,7 @@ interface Paths {
   queen: Path2D;
   lockBody: Path2D;
   lockShackle: Path2D;
+  pawn: Path2D;
 }
 let paths: Paths | null = null;
 const getPaths = (): Paths =>
@@ -74,6 +86,12 @@ const getPaths = (): Paths =>
     lockBody: new Path2D("M0.25 0.48 H0.75 V0.90 H0.25 Z"),
     lockShackle: new Path2D(
       "M0.35 0.48 V0.33 A0.15 0.15 0 0 1 0.65 0.33 V0.48",
+    ),
+    // Pawn: round head, flared body, flat base.
+    pawn: new Path2D(
+      "M0.63 0.30 A0.13 0.13 0 1 1 0.37 0.30 A0.13 0.13 0 1 1 0.63 0.30 Z " +
+        "M0.40 0.44 H0.60 C0.60 0.56 0.68 0.62 0.70 0.72 H0.30 C0.32 0.62 0.40 0.56 0.40 0.44 Z " +
+        "M0.24 0.76 H0.76 V0.86 H0.24 Z",
     ),
   });
 
@@ -89,7 +107,12 @@ export class BoardRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly observer: ResizeObserver;
   private palette: Palette;
-  private state: RenderState = { n: 0, queens: [], highlight: NO_HIGHLIGHT };
+  private state: RenderState = {
+    n: 0,
+    queens: [],
+    walls: [],
+    highlight: NO_HIGHLIGHT,
+  };
   private layout: Layout = { side: 0, cell: 0 };
   private dpr = 1;
   private rafId = 0;
@@ -166,7 +189,7 @@ export class BoardRenderer {
   /** Mengembalikan false jika hanya memicu resize (belum menggambar). */
   private paint(): boolean {
     if (this.disposed) return false;
-    const { n, queens, highlight } = this.state;
+    const { n, queens, walls, highlight } = this.state;
     const host = this.canvas.parentElement!;
     const fresh = computeLayout(host.clientWidth, host.clientHeight, n);
     if (fresh.side !== this.layout.side) {
@@ -210,6 +233,10 @@ export class BoardRenderer {
       );
     }
 
+    for (const w of walls) {
+      if (w.row < 0 || w.row >= n || w.col < 0 || w.col >= n) continue;
+      this.drawPawn(w, cell);
+    }
     for (const q of queens) {
       if (q.row < 0 || q.row >= n || q.col < 0 || q.col >= n) continue;
       this.drawQueen(q, cell);
@@ -219,6 +246,21 @@ export class BoardRenderer {
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, side - 1, side - 1);
     return true;
+  }
+
+  private drawPawn(w: WallCell, cell: number): void {
+    const { ctx, palette } = this;
+    const p = getPaths();
+    ctx.save();
+    ctx.translate(w.col * cell, w.row * cell);
+    ctx.scale(cell, cell);
+    ctx.fillStyle = palette.pawn; // white pawn
+    ctx.strokeStyle = palette.pawnOutline;
+    ctx.lineWidth = 0.04;
+    ctx.lineJoin = "round";
+    ctx.fill(p.pawn);
+    ctx.stroke(p.pawn);
+    ctx.restore();
   }
 
   private drawQueen(q: QueenCell, cell: number): void {

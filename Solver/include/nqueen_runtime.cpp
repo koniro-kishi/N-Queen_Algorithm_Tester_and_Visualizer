@@ -5,9 +5,9 @@ extern "C" {
   int  nq_put(int x, int y);
   void nq_remove(int x, int y);
   int  nq_check(int x, int y);
-  void nq_view(char* buf, int n);   // host writes n*n bytes ('Q' / 'x') into buf
+  void nq_view(char* buf, int n);   // host writes n*n bytes ('Q' / 'x' / 'W') into buf
 
-  int nq_run(int n);                // exported; called by the worker
+  int nq_run(int n, int q);         // exported; called by the worker
 }
 
 static int g_n = 0;
@@ -25,7 +25,7 @@ std::vector<std::string> viewBoard() {
   return rows;
 }
 
-extern "C" int nq_run(int n) {
+extern "C" int nq_run(int n, int q) {
   g_n = n;
-  return solve(n);
+  return solve(n, q);
 }

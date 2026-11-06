@@ -19,6 +19,7 @@ describe("buildRenderState", () => {
       { row: 0, col: 1, preplaced: true },
       { row: 1, col: 3, preplaced: false },
     ]);
+    expect(s.walls).toEqual([]);
     expect(s.highlight.kind).toBe("valid");
   });
 
@@ -36,6 +37,22 @@ describe("buildRenderState", () => {
 
   it("tanpa event -> tanpa highlight", () => {
     expect(buildRenderState(new Board(4), null).highlight.kind).toBe("none");
+  });
+
+  it("memetakan pion (W) ke walls, dan ratu di belakang pion tidak menyerang", () => {
+    const b = new Board(4, [[0, 1], [2, 2]]);
+    b.put(0, 0);
+    const ok = b.put(0, 2);
+    const s = buildRenderState(
+      b,
+      decodeEvent(encodeEvent(0, 2, OP_PUT, ok, b.pairs)),
+    );
+    expect(s.walls).toEqual([
+      { row: 0, col: 1 },
+      { row: 2, col: 2 },
+    ]);
+    expect(s.queens).toHaveLength(2);
+    expect(s.highlight.kind).toBe("valid");
   });
 });
 

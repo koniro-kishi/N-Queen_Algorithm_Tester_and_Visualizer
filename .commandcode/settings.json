@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "powershell",
+      "Shell(npm:*)",
+      "Shell(node \"node_modules/tsx/dist/cli.mjs\" driver/bench/benchmark.ts --walled --k 1 --cap 10 --out \"$env:COMMANDCODE_SCRATCHPAD\\wall-k1.csv\")"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

@@ -6,5 +6,6 @@
   "defaultStepDelayMs": 500,
   "solverMaxMemoryMB": 512,
   "benchCapSeconds": 10,
-  "cutoffSeconds": 60
+  "cutoffSeconds": 60,
+  "maxWallFraction": 0.25
 }
