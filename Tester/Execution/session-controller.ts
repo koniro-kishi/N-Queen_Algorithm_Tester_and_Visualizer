@@ -28,6 +28,8 @@ export type ControllerState =
 export interface Problem {
   n: number;
   preplaced: Array<[number, number]>;
+  walls?: Array<[number, number]>;
+  target?: number;
   moduleUrl: string;
   /** Effective timeout in seconds. */
   timeoutSeconds: number;
@@ -296,7 +298,7 @@ export class SessionController {
 
   private reset(): void {
     this.history.clear();
-    const b = new Board(this.problem.n);
+    const b = new Board(this.problem.n, this.problem.walls ?? []);
     for (const [x, y] of this.problem.preplaced) {
       b.put(x, y);
       b.lock(x, y);
@@ -317,20 +319,30 @@ export class SessionController {
     this.statusOverride = undefined;
   }
 
+  /** Fields both passes must share: measuring and tracing have to solve the exact same problem. */
+  private baseSessionOptions() {
+    const p = this.problem;
+    return {
+      n: p.n,
+      preplaced: p.preplaced,
+      walls: p.walls,
+      target: p.target,
+      moduleUrl: p.moduleUrl,
+      timeoutSeconds: p.timeoutSeconds,
+      cutoffSeconds: p.cutoffSeconds,
+      createWorker: this.o.createWorker,
+    };
+  }
+
   private startSession(initialPermit: number): void {
     this.statusOverride = undefined; // "Cancelled" only lasts until the next run starts
     const p = this.problem;
     const factory: SessionFactory =
       this.o.sessionFactory ?? ((o) => new Session(o));
     const s: SessionLike = factory({
-      n: p.n,
-      preplaced: p.preplaced,
-      moduleUrl: p.moduleUrl,
-      timeoutSeconds: p.timeoutSeconds,
-      cutoffSeconds: p.cutoffSeconds,
+      ...this.baseSessionOptions(),
       recordEvents: !p.onlyShowResult,
       initialPermit,
-      createWorker: this.o.createWorker,
       onEvents: (ev) => {
         if (this.session === s) this.handleEvents(ev);
       },
@@ -346,18 +358,12 @@ export class SessionController {
     this.statusOverride = undefined;
     this.afterMeasure = after;
     this.state = "Measuring";
-    const p = this.problem;
     const factory: SessionFactory =
       this.o.sessionFactory ?? ((o) => new Session(o));
     const s: SessionLike = factory({
-      n: p.n,
-      preplaced: p.preplaced,
-      moduleUrl: p.moduleUrl,
-      timeoutSeconds: p.timeoutSeconds,
-      cutoffSeconds: p.cutoffSeconds,
+      ...this.baseSessionOptions(),
       recordEvents: false, // same path as the benchmark
       initialPermit: PERMIT_UNLIMITED,
-      createWorker: this.o.createWorker,
       onFinish: (r) => {
         if (this.session === s) this.handleMeasured(r);
       },
@@ -423,7 +429,7 @@ export class SessionController {
   private showFinalBoard(rows: string[]): void {
     const n = this.problem.n;
     if (rows.length !== n) return;
-    const b = new Board(n);
+    const b = new Board(n, this.problem.walls ?? []);
     rows.forEach((row, x) => {
       for (let y = 0; y < Math.min(n, row.length); y++)
         if (row[y] === "Q") b.put(x, y);

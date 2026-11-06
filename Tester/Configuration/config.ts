@@ -7,7 +7,11 @@ export interface TesterConfig {
   solverMaxMemoryMB: number;
   benchCapSeconds: number;
   cutoffSeconds: number;
+  /** Walled N-Queen: the UI accepts W <= floor(N^2 * maxWallFraction). Optional in the file, default below. */
+  maxWallFraction: number;
 }
+
+export const DEFAULT_MAX_WALL_FRACTION = 0.25;
 
 export function validateConfig(raw: unknown): TesterConfig {
   const c = raw as Record<string, unknown>;
@@ -26,6 +30,10 @@ export function validateConfig(raw: unknown): TesterConfig {
     solverMaxMemoryMB: num("solverMaxMemoryMB"),
     benchCapSeconds: num("benchCapSeconds"),
     cutoffSeconds: num("cutoffSeconds"),
+    maxWallFraction:
+      c?.maxWallFraction === undefined
+        ? DEFAULT_MAX_WALL_FRACTION
+        : num("maxWallFraction"),
   };
   if (cfg.toleranceFactor < 1 || cfg.toleranceFactor > 100)
     throw new Error("config.toleranceFactor must be in [1, 100]");
@@ -37,5 +45,7 @@ export function validateConfig(raw: unknown): TesterConfig {
     throw new Error("config.benchCapSeconds must be > 0");
   if (cfg.cutoffSeconds <= cfg.minTimeoutSeconds)
     throw new Error("config.cutoffSeconds must be > minTimeoutSeconds");
+  if (cfg.maxWallFraction <= 0 || cfg.maxWallFraction > 1)
+    throw new Error("config.maxWallFraction must be in (0, 1]");
   return cfg;
 }

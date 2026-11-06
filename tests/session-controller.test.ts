@@ -465,6 +465,25 @@ describe("opCounts and Only Show Result board", () => {
 describe("Measuring pass", () => {
   const mk = () => make({}, undefined, undefined, true);
 
+  it("both passes receive the same walls and target", () => {
+    const walls: Array<[number, number]> = [
+      [1, 1],
+      [2, 3],
+    ];
+    const { c, sessions } = make(
+      { n: 5, preplaced: [[0, 0]], walls, target: 7 },
+      undefined,
+      undefined,
+      true,
+    );
+    c.play();
+    expect(sessions[0]!.o.walls).toEqual(walls);
+    expect(sessions[0]!.o.target).toBe(7);
+    sessions[0]!.o.onFinish(OK);
+    expect(sessions[1]!.o.walls).toEqual(walls);
+    expect(sessions[1]!.o.target).toBe(7);
+  });
+
   it("Play from Idle measures first (unrecorded); only Stop is enabled", () => {
     const { c, sessions, last } = mk();
     c.play();

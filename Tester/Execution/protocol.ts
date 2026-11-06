@@ -15,6 +15,9 @@ export interface DecodedEvent {
   pairs: number;
 }
 
+/** The pairs field is 8 bits. Larger counts (possible once walls allow more than N queens) saturate at 255. */
+export const MAX_PAIRS_FIELD = 255;
+
 export function encodeEvent(
   x: number,
   y: number,
@@ -28,7 +31,7 @@ export function encodeEvent(
       (y << 5) |
       ((isCheck ? 0 : op) << 10) |
       ((valid ? 1 : 0) << 11) |
-      (pairs << 12) |
+      (Math.min(pairs, MAX_PAIRS_FIELD) << 12) |
       (isCheck << 20)) >>>
     0
   );
@@ -109,6 +112,10 @@ export interface StartMessage {
   moduleUrl: string;
   n: number;
   preplaced: Array<[number, number]>;
+  /** Walled N-Queen: wall cells. Absent = classic board. */
+  walls?: Array<[number, number]>;
+  /** Walled N-Queen: target queen count q passed to solve(n, q). Absent = n. */
+  target?: number;
   recordEvents: boolean; // false = Only Show Result
   control: SharedArrayBuffer;
 }

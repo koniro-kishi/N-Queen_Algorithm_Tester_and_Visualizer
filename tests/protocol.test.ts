@@ -29,6 +29,13 @@ describe("event encoding", () => {
   it("always yields an unsigned 32-bit value", () => {
     expect(encodeEvent(19, 19, OP_REMOVE, true, 255)).toBeGreaterThanOrEqual(0);
   });
+  it("saturates pairs at 255 instead of corrupting the op bits", () => {
+    for (const pairs of [256, 300, 1000, 100_000]) {
+      expect(decodeEvent(encodeEvent(3, 4, OP_PUT, false, pairs))).toEqual({
+        x: 3, y: 4, op: OP_PUT, valid: false, pairs: 255,
+      });
+    }
+  });
 });
 
 describe("control block", () => {

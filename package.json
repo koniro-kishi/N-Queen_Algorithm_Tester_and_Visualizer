@@ -13,7 +13,8 @@
     "preview": "vite preview --config driver/vite.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "bench": "tsx driver/bench/benchmark.ts"
+    "bench": "tsx driver/bench/benchmark.ts",
+    "bench:wall": "tsx driver/bench/benchmark.ts --walled"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
